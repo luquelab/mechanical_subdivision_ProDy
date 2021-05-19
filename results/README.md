@@ -1,2 +1,2 @@
 # WHAT
-This folder contains the results, performance analysis, and commented references associated with the project.
+This folder contains the model results and subdivision results of the program.
