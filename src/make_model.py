@@ -1,10 +1,8 @@
 from prody import *
-import numpy as np
 import sys
 import os
 #import requests
 #import gzip
-#from io import StringIO
 
 pdb = sys.argv[1]
 filename = pdb + '_full.pdb'
