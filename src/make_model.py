@@ -5,11 +5,11 @@ import os
 #import gzip
 
 pdb = sys.argv[1]
-filename = pdb + '_full.pdb'
+filename = pdb + '.pdb'
 n_modes = int(sys.argv[2])
 
 print(os.getcwd())
-os.chdir("../data/capsid_pdbs/")
+os.chdir("../data/asym_pdbs/")
 print(os.getcwd())
 
 # if not os.path.exists(filename):
@@ -22,10 +22,10 @@ print(os.getcwd())
 #         outfile.write(decompressedFile.read())
 
 
-capsid = parsePDB(pdb + '_full.pdb')
+capsid = parsePDB(filename)
 calphas = capsid.select('calpha').copy()
 gnm = GNM(pdb + '_full')
-gnm.buildKirchhoff(calphas, cutoff=7.5, kdtree=True, sparse=True)
+gnm.buildKirchhoff(calphas, cutoff=10.0, kdtree=True, sparse=True)
 
 gnm.calcModes(n_modes,turbo=True)
 
@@ -33,3 +33,4 @@ print(os.getcwd())
 os.chdir("../../results/models")
 print(os.getcwd())
 saveModel(gnm,matrices=True)
+saveAtoms(calphas,filename='calphas_' + pdb)
