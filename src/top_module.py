@@ -1,13 +1,14 @@
-from prody import *
 import sys
-import os
-import numpy as np
 import scipy
 from scipy import sparse
 from prody import LOGGER, SETTINGS
-from sklearn import cluster
 from make_model import make_model
-pdb = sys.argv[0]
-gnm, calpha = make_model(pdb, n_modes)
+from subdivide_model import subdivide_model
 
-gnm, calpha = make_model(pdb, n_modes)
+pdb = sys.argv[1]
+n_modes = int(sys.argv[2])
+n_clusters = int(sys.argv[3])
+
+gnm, calphas = make_model(pdb, n_modes)
+
+calphas, domains = subdivide_model(pdb, n_clusters)

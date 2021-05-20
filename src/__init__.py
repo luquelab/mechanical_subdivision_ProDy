@@ -1,1 +1,2 @@
 from make_model import make_model
+from subdivide_model import subdivide_model
