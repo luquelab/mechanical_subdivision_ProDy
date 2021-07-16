@@ -1,14 +1,13 @@
 from prody import *
-import sys
 import os
 import wget
 import shutil
 import gzip
-#import requests
-#import gzip
+from scipy.sparse.linalg import eigsh
 
 
-def make_model(pdb, n_modes):
+
+def make_model(pdb, n_modes, type):
     filename = pdb + '_full.pdb'
 
 
@@ -25,14 +24,36 @@ def make_model(pdb, n_modes):
 
     capsid = parsePDB(filename)
     calphas = capsid.select('ca').copy()
-    gnm = GNM(pdb + '_full')
-    gnm.buildKirchhoff(calphas, cutoff=10.0, kdtree=True, sparse=True)
-    gnm.calcModes(n_modes,turbo=True)
+    if type == 'gnm':
 
-    print(os.getcwd())
-    os.chdir("../../results/models")
-    print(os.getcwd())
-    saveModel(gnm,matrices=True)
-    saveAtoms(calphas,filename='calphas_' + pdb)
+        gnm = GNM(pdb + '_full')
+        gnm.buildKirchhoff(calphas, cutoff=7.5, kdtree=False, sparse=True)
+        gnm.calcModes(n_modes,turbo=True)
 
-    return gnm, calphas
+        print(os.getcwd())
+        os.chdir("../../results/models")
+        print(os.getcwd())
+        saveModel(gnm,matrices=True)
+        saveAtoms(calphas,filename='calphas_' + pdb)
+
+        return gnm, calphas
+
+    elif type == 'anm':
+        anm = ANM(pdb + '_full')
+        anm.buildHessian(calphas, cutoff=10.0, kdtree=True, sparse=True)
+        evals, evecs = eigsh(anm.getHessian(), k=n_modes, sigma=1E-6, which='LA')
+        anm._eigvals = evals
+        anm._n_modes = len(evals)
+        anm._eigvecs = evecs
+        anm._vars = 1 / evals
+        anm._array = evecs
+
+        print(os.getcwd())
+        os.chdir("../../results/models")
+        print(os.getcwd())
+        saveModel(anm, matrices=True)
+        saveAtoms(calphas, filename='calphas_' + pdb)
+
+        return anm, calphas
+    else:
+        raise ValueError('type must be anm or gnm.')
