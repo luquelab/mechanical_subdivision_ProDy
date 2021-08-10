@@ -14,15 +14,14 @@ def make_model(pdb, n_modes, type):
     os.chdir("../data/capsid_pdbs/")
 
     if not os.path.exists(filename):
-        vdb_url = 'http://viperdb.scripps.edu/resources/OLIGOMERS/' + pdb + '_full.vdb.gz'
+        vdb_url = 'https://files.rcsb.org/download/' + pdb + '.pdb.gz'
         print(vdb_url)
         vdb_filename = wget.download(vdb_url)
         with gzip.open(vdb_filename, 'rb') as f_in:
             with open(filename, 'wb') as f_out:
                 shutil.copyfileobj(f_in, f_out)
 
-
-    capsid = parsePDB(filename)
+    capsid = parsePDB(filename, biomol=True)
     calphas = capsid.select('ca').copy()
     if type == 'gnm':
 
