@@ -6,6 +6,7 @@ from sklearn import cluster
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearnex import patch_sklearn
+import psutil
 
 
 
