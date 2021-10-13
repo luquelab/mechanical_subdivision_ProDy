@@ -71,6 +71,9 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
             writePDB(pdb + '_' + nc + '_domains.pdb', calphas, beta=domains)
 
         return labels, scores_km
+
+    print(os.getcwd())
+    os.chdir("../../results/subdivisions")
     print('Spectral Clustering')
     n_evecs = 60
     n_range = [12, 20, 30]
