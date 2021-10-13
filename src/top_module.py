@@ -13,8 +13,7 @@ n_modes = int(sys.argv[3])
 cluster_range = sys.argv[4:]
 cluster_range = [int(i) for i in cluster_range]
 
-# run with
 
-#gnm, calphas = make_model(pdb, n_modes, type)
+gnm, calphas = make_model(pdb, n_modes, type)
 
 calphas, domains = subdivide_model(pdb, cluster_range)
