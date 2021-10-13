@@ -11,6 +11,7 @@ from sklearnex import patch_sklearn
 def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type = 'anm'):
     print(os.getcwd())
     os.chdir("../../results/models")
+    print('Loading Model')
     if model_in is None:
         if type == 'gnm':
             model = loadModel(pdb + '_full.gnm.npz')
@@ -22,8 +23,9 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
         calphas = loadAtoms('calphas_' + pdb + '.ag.npz')
     else:
         calphas = calphas_in
-
+    print('Calculating Distance Fluctuations')
     distFlucts = calcDistFlucts(model, norm=False)
+    print('Calculating Similarity Matrix')
     n = distFlucts.shape[0]
     nearestNeighs = np.full((n, n), True, dtype=bool)
     np.fill_diagonal(nearestNeighs, False)
@@ -34,6 +36,7 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
     sims = np.exp(-sigma * distFlucts * distFlucts)
 
     def embedding(n_evecs, sims):
+        print('Performing Spectral Embedding')
         from sklearnex import patch_sklearn
         patch_sklearn()
         from sklearn.manifold import spectral_embedding
@@ -41,7 +44,7 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
         return X_transformed
 
     def kmed_embedding(n_range, maps):
-
+        print('Clustering Embedded Points')
         from sklearnex import unpatch_sklearn
         unpatch_sklearn()
         from sklearn_extra.cluster import KMedoids
@@ -53,23 +56,29 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
         scores_km = []
         for n in range(len(n_range)):
             n_clusters = n_range[n]
+            print('Clusters: ' + str(n_clusters))
+
             kmed = KMedoids(n_clusters=n_clusters).fit(maps[:, :n_clusters])
             labels.append(kmed.labels_)
+
+            print('Scoring')
             testScore = silhouette_score(maps[:, :n_clusters], kmed.labels_)
             scores_km.append(testScore)
 
+            print('Saving Results')
             domains = kmed.labels_
-
             nc = str(n_range[n])
             writePDB(pdb + '_' + nc + '_domains.pdb', calphas, beta=domains)
 
         return labels, scores_km
-
+    print('Spectral Clustering')
     n_evecs = 60
     n_range = [12, 20, 30]
     maps = embedding(n_evecs, sims)
     labels, scores = kmed_embedding(n_range, maps)
 
+
+    print('Plotting')
     fig, ax = plt.subplots(1, 1, figsize=(12, 6))
     ax.scatter(n_range, scores, marker='D', label=pdb)
     ax.plot(n_range, scores)
