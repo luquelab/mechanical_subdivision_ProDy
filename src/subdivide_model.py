@@ -40,7 +40,7 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
         from sklearnex import patch_sklearn
         patch_sklearn()
         from sklearn.manifold import spectral_embedding
-        X_transformed = spectral_embedding(sims, n_components=n_evecs, drop_first=False)
+        X_transformed = spectral_embedding(sims, n_components=n_evecs, drop_first=False, eigen_solver='amg')
         return X_transformed
 
     def kmed_embedding(n_range, maps):
@@ -76,7 +76,7 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
     os.chdir("../../results/subdivisions")
     print('Spectral Clustering')
     n_evecs = 60
-    n_range = [12, 20, 30]
+    n_range = cluster_range
     maps = embedding(n_evecs, sims)
     labels, scores = kmed_embedding(n_range, maps)
 
