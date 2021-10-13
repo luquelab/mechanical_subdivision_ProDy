@@ -10,7 +10,7 @@ from sklearnex import patch_sklearn
 
 def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type = 'anm'):
     print(os.getcwd())
-    os.chdir("../results/models")
+    os.chdir("../../results/models")
     if model_in is None:
         if type == 'gnm':
             model = loadModel(pdb + '_full.gnm.npz')
