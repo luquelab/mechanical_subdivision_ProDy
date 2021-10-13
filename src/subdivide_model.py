@@ -51,7 +51,7 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
         from sklearnex import patch_sklearn
         patch_sklearn()
         from sklearn.manifold import spectral_embedding
-        X_transformed = spectral_embedding(sims, n_components=n_evecs, drop_first=False, eigen_solver='amg')
+        X_transformed = spectral_embedding(sims, n_components=n_evecs, drop_first=False, eigen_solver='arpack')
         print('Memory Usage: ', psutil.virtual_memory().percent)
         return X_transformed
 
