@@ -86,6 +86,7 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
 
         return labels, scores_km
 
+    from sklearn.preprocessing import normalize
     print(os.getcwd())
     os.chdir("../../results/subdivisions")
     print('Spectral Clustering')
@@ -95,6 +96,7 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
     maps = embedding(n_evecs, sims)
     end = time.time()
     print(end - start, ' Seconds')
+    normalize(maps, copy=False)
     start = time.time()
     labels, scores = kmed_embedding(n_range, maps)
     end = time.time()
