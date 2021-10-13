@@ -57,6 +57,7 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
 
     def kmed_embedding(n_range, maps):
         print('Clustering Embedded Points')
+
         from sklearnex import unpatch_sklearn
         unpatch_sklearn()
         from sklearn_extra.cluster import KMedoids
@@ -88,8 +89,8 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
     print(os.getcwd())
     os.chdir("../../results/subdivisions")
     print('Spectral Clustering')
-    n_evecs = 60
     n_range = cluster_range
+    n_evecs = max(n_range)
     start = time.time()
     maps = embedding(n_evecs, sims)
     end = time.time()
