@@ -89,6 +89,7 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
     ax.set_ylabel('Silhouette Score')
     ax.legend()
     fig.tight_layout()
+    print(pdb + '_' + nc + '_domains.png')
     plt.savefig(pdb + '_' + nc + '_domains.png')
     plt.show()
 
