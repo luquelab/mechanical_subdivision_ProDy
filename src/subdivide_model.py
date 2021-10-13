@@ -83,6 +83,7 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
     ax.scatter(n_range, scores, marker='D', label=pdb)
     ax.plot(n_range, scores)
     ax.axvline(x=n_range[np.argmax(scores)], label='Best Score', color='black')
+    nc = str(n_range[np.argmax(scores)])
     ax.set_xticks(n_range)
     ax.set_xlabel('n_clusters')
     ax.set_ylabel('Silhouette Score')
