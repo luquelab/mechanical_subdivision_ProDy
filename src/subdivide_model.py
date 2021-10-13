@@ -28,6 +28,7 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
     print('Calculating Distance Fluctuations')
     start = time.time()
     distFlucts = calcDistFlucts(model, norm=False)
+    print('Memory Usage: ', psutil.virtual_memory().percent)
     end = time.time()
     print(end - start, ' Seconds')
     print('Calculating Similarity Matrix')
@@ -40,6 +41,7 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
     nnDistFlucts = distFlucts[nearestNeighs]
     sigma = 1 / (2 * np.mean(nnDistFlucts) ** 2)
     sims = np.exp(-sigma * distFlucts * distFlucts)
+    print('Memory Usage: ', psutil.virtual_memory().percent)
     end = time.time()
     print(end - start, ' Seconds')
 
@@ -49,6 +51,7 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
         patch_sklearn()
         from sklearn.manifold import spectral_embedding
         X_transformed = spectral_embedding(sims, n_components=n_evecs, drop_first=False, eigen_solver='amg')
+        print('Memory Usage: ', psutil.virtual_memory().percent)
         return X_transformed
 
     def kmed_embedding(n_range, maps):
@@ -72,6 +75,7 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
             print('Scoring')
             testScore = silhouette_score(maps[:, :n_clusters], kmed.labels_)
             scores_km.append(testScore)
+            print('Memory Usage: ', psutil.virtual_memory().percent)
 
             print('Saving Results')
             domains = kmed.labels_

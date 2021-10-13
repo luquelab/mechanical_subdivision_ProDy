@@ -5,6 +5,7 @@ import shutil
 import gzip
 from scipy.sparse.linalg import eigsh
 import time
+import psutil
 
 
 def make_model(pdb, n_modes, type):
@@ -28,6 +29,7 @@ def make_model(pdb, n_modes, type):
 
         gnm = GNM(pdb + '_full')
         gnm.buildKirchhoff(calphas, cutoff=7.5, kdtree=False, sparse=True)
+        print('Memory Usage: ', psutil.virtual_memory().percent)
         gnm.calcModes(n_modes,turbo=True)
 
         print(os.getcwd())
