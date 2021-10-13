@@ -81,4 +81,4 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
     fig.tight_layout()
     plt.show()
 
-    return calphas, domains
+    return calphas, labels
