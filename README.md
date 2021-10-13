@@ -27,3 +27,6 @@ FOLDER: /results
 
 FOLDER: /src
 --> This folder contains source code files and jupyter notebooks.
+
+## Running The Program
+python 

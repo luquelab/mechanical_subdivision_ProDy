@@ -23,6 +23,7 @@ def make_model(pdb, n_modes, type):
 
     capsid = parsePDB(filename, biomol=True)
     calphas = capsid.select('ca').copy()
+    showProtein(calphas)
     if type == 'gnm':
 
         gnm = GNM(pdb + '_full')
@@ -40,7 +41,7 @@ def make_model(pdb, n_modes, type):
     elif type == 'anm':
         anm = ANM(pdb + '_full')
         anm.buildHessian(calphas, cutoff=10.0, kdtree=True, sparse=True)
-        evals, evecs = eigsh(anm.getHessian(), k=n_modes, sigma=1E-6, which='LM')
+        evals, evecs = eigsh(anm.getHessian(), k=n_modes, sigma=1E-5, which='LA')
         anm._eigvals = evals
         anm._n_modes = len(evals)
         anm._eigvecs = evecs
