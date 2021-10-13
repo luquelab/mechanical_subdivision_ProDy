@@ -41,7 +41,7 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
     nearestNeighs &= (dist <= 10.0)
     nnDistFlucts = distFlucts[nearestNeighs]
     sigma = 1 / (2 * np.mean(nnDistFlucts) ** 2)
-    sims = np.exp(-sigma * distFlucts * distFlucts)
+    sims = np.exp(-sigma * distFlucts**2)
     print('Memory Usage: ', psutil.virtual_memory().percent)
     end = time.time()
     print(end - start, ' Seconds')
@@ -71,7 +71,7 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
             n_clusters = n_range[n]
             print('Clusters: ' + str(n_clusters))
 
-            kmed = KMeans(n_clusters=n_clusters).fit(maps[:, :n_clusters])
+            kmed = KMeans(n_clusters=n_clusters, n_init = 500).fit(maps[:, :n_clusters])
             labels.append(kmed.labels_)
 
             print('Scoring')
