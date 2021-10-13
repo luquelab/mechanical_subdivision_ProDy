@@ -1,4 +1,6 @@
 import os
+import time
+
 from prody import *
 from sklearn import cluster
 import numpy as np
@@ -24,9 +26,13 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
     else:
         calphas = calphas_in
     print('Calculating Distance Fluctuations')
+    start = time.time()
     distFlucts = calcDistFlucts(model, norm=False)
+    end = time.time()
+    print(end - start, ' Seconds')
     print('Calculating Similarity Matrix')
     n = distFlucts.shape[0]
+    start = time.time()
     nearestNeighs = np.full((n, n), True, dtype=bool)
     np.fill_diagonal(nearestNeighs, False)
     dist = buildDistMatrix(calphas.getCoords())
@@ -34,6 +40,8 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
     nnDistFlucts = distFlucts[nearestNeighs]
     sigma = 1 / (2 * np.mean(nnDistFlucts) ** 2)
     sims = np.exp(-sigma * distFlucts * distFlucts)
+    end = time.time()
+    print(end - start, ' Seconds')
 
     def embedding(n_evecs, sims):
         print('Performing Spectral Embedding')
@@ -77,8 +85,15 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
     print('Spectral Clustering')
     n_evecs = 60
     n_range = cluster_range
+    start = time.time()
     maps = embedding(n_evecs, sims)
+    end = time.time()
+    print(end - start, ' Seconds')
+    start = time.time()
     labels, scores = kmed_embedding(n_range, maps)
+    end = time.time()
+    print(end - start, ' Seconds')
+
 
 
     print('Plotting')

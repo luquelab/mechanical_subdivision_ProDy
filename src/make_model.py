@@ -4,7 +4,7 @@ import wget
 import shutil
 import gzip
 from scipy.sparse.linalg import eigsh
-
+import time
 
 
 def make_model(pdb, n_modes, type):
@@ -42,7 +42,10 @@ def make_model(pdb, n_modes, type):
         anm = ANM(pdb + '_full')
         anm.buildHessian(calphas, cutoff=10.0, kdtree=True, sparse=True)
         print('Calculating Normal Modes')
+        start = time.time()
         evals, evecs = eigsh(anm.getHessian(), k=n_modes, sigma=1E-5, which='LA')
+        end = time.time()
+        print(end - start)
         anm._eigvals = evals
         anm._n_modes = len(evals)
         anm._eigvecs = evecs
