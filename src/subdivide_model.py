@@ -57,6 +57,10 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
 
     def kmed_embedding(n_range, maps):
         print('Clustering Embedded Points')
+
+        from sklearnex import unpatch_sklearn
+        unpatch_sklearn()
+
         from sklearn_extra.cluster import KMedoids
         from sklearn.cluster import KMeans
 
