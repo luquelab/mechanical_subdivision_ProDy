@@ -45,6 +45,8 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
     print('Memory Usage: ', psutil.virtual_memory().percent)
     end = time.time()
     print(end - start, ' Seconds')
+    del distFlucts
+    del dist
 
     def embedding(n_evecs, sims):
         print('Performing Spectral Embedding')
