@@ -11,7 +11,7 @@ import psutil
 
 
 
-def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type = 'anm'):
+def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in = None ,calphas_in=None, type = 'anm'):
     print(os.getcwd())
     os.chdir("../../results/models")
     print('Loading Model')
@@ -93,7 +93,7 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
     print(os.getcwd())
     os.chdir("../../results/subdivisions")
     print('Spectral Clustering')
-    n_range = cluster_range
+    n_range = np.arange(cluster_start, cluster_stop, cluster_step)
     n_evecs = max(n_range)
     start = time.time()
     maps = embedding(n_evecs, sims)
