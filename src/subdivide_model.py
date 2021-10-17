@@ -74,7 +74,7 @@ def subdivide_model(pdb, cluster_range, model_in = None ,calphas_in=None, type =
             n_clusters = n_range[n]
             print('Clusters: ' + str(n_clusters))
 
-            kmed = KMeans(n_clusters=n_clusters, n_init = 50, tol=1e-8).fit(maps[:, :n_clusters])
+            kmed = KMeans(n_clusters=n_clusters, n_init = 200, tol=1e-8).fit(maps[:, :n_clusters])
             labels.append(kmed.labels_)
 
             print('Scoring')

@@ -1,3 +1,8 @@
+#! ~/anaconda3/bin/python
+#PBS -l nodes=2:ppn=24
+#PBS -I walltime=02:00:00
+
+
 import sys
 import scipy
 from scipy import sparse
