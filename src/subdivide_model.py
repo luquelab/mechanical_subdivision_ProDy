@@ -35,10 +35,7 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in = N
     print('Calculating Similarity Matrix')
     n = distFlucts.shape[0]
     start = time.time()
-    nearestNeighs = np.full((n, n), True, dtype=bool)
-    np.fill_diagonal(nearestNeighs, False)
-    dist = buildDistMatrix(calphas.getCoords())
-    nearestNeighs &= (dist <= 10.0)
+    nearestNeighs = kirch.astype('bool').setdiag(False)
     nnDistFlucts = distFlucts[nearestNeighs]
     sigma = 1 / (2 * np.mean(nnDistFlucts) ** 2)
     sims = np.exp(-sigma * distFlucts**2)
