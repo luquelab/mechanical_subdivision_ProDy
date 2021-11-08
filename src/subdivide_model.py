@@ -7,11 +7,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearnex import patch_sklearn
 import psutil
+import numba as nb
 
 
-
-
-def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in = None ,calphas_in=None, type = 'anm'):
+def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=None, calphas_in=None, type='anm'):
     print(os.getcwd())
     os.chdir("../../results/models")
     print('Loading Model')
@@ -26,27 +25,62 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in = N
         calphas = loadAtoms('calphas_' + pdb + '.ag.npz')
     else:
         calphas = calphas_in
-    print('Calculating Distance Fluctuations')
-    start = time.time()
-    distFlucts = calcDistFlucts(model, norm=False)
-    print('Memory Usage: ', psutil.virtual_memory().percent)
-    end = time.time()
-    print(end - start, ' Seconds')
-    print('Calculating Similarity Matrix')
-    n = distFlucts.shape[0]
-    start = time.time()
-    nearestNeighs = np.full((n, n), True, dtype=bool)
-    np.fill_diagonal(nearestNeighs, False)
-    dist = buildDistMatrix(calphas.getCoords())
-    nearestNeighs &= (dist <= 10.0)
-    nnDistFlucts = distFlucts[nearestNeighs]
-    sigma = 1 / (2 * np.mean(nnDistFlucts) ** 2)
-    sims = np.exp(-sigma * distFlucts**2)
-    print('Memory Usage: ', psutil.virtual_memory().percent)
-    end = time.time()
-    print(end - start, ' Seconds')
-    del distFlucts
-    del dist
+
+    @nb.njit(parallel=False)
+    def cov(evals, evecs, i, j):
+        n_e = evals.shape[0]
+        n_d = evecs.shape[1]
+        tr1 = 0
+        tr2 = 0
+        tr3 = 0
+        for n in nb.prange(n_e):
+            l = evals[n]
+            tr1 += 1 / l * (evecs[3 * i, n] * evecs[3 * j, n] + evecs[3 * i + 1, n] * evecs[3 * j + 1, n] + evecs[
+                3 * i + 2, n] * evecs[3 * j + 2, n])
+            tr2 += 1 / l * (evecs[3 * i, n] * evecs[3 * i, n] + evecs[3 * i + 1, n] * evecs[3 * i + 1, n] + evecs[
+                3 * i + 2, n] * evecs[3 * i + 2, n])
+            tr3 += 1 / l * (evecs[3 * j, n] * evecs[3 * j, n] + evecs[3 * j + 1, n] * evecs[3 * j + 1, n] + evecs[
+                3 * j + 2, n] * evecs[3 * j + 2, n])
+        cov = tr1 / np.sqrt(tr2 * tr3)
+        return cov
+
+    def con_c(evals, evecs, c, row, col):
+        n_d = int(evecs.shape[0] / 3)
+        n_e = evals.shape[0]
+
+        for k in range(row.shape[0]):
+            i, j = (row[k], col[k])
+            c[i, j] = cov(evals, evecs, i, j)
+        return c
+
+    def con_d(c, d, row, col):
+        for k in range(row.shape[0]):
+            i, j = (row[k], col[k])
+            d[i, j] = 2 - 2 * c[i, j]
+        return d
+
+    from scipy import sparse
+
+    evals = model.getEigvals()
+    evecs = model.getEigvecs()
+    n_d = int(evecs.shape[0] / 3)
+
+    kirch = model.getKirchhoff().tocoo()
+
+    covariance = sparse.lil_matrix((n_d, n_d))
+    df = sparse.lil_matrix((n_d, n_d))
+    covariance = con_c(evals, evecs, covariance, kirch.row, kirch.col)
+    covariance = covariance.tocsr()
+    d = con_d(covariance, df, kirch.row, kirch.col)
+    d = d.tocsr()
+
+    nnDistFlucts = np.mean(d.data)
+
+    sigma = 1 / (2 * nnDistFlucts ** 2)
+    sims = -sigma * d ** 2
+    data = sims.data
+    data = np.exp(data)
+    sims.data = data
 
     def embedding(n_evecs, sims):
         print('Performing Spectral Embedding')
@@ -74,7 +108,7 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in = N
             n_clusters = n_range[n]
             print('Clusters: ' + str(n_clusters))
 
-            kmed = KMeans(n_clusters=n_clusters, n_init = 200, tol=1e-8).fit(maps[:, :n_clusters])
+            kmed = KMeans(n_clusters=n_clusters, n_init=200, tol=1e-8).fit(maps[:, :n_clusters])
             labels.append(kmed.labels_)
 
             print('Scoring')
@@ -104,8 +138,6 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in = N
     labels, scores = kmed_embedding(n_range, maps)
     end = time.time()
     print(end - start, ' Seconds')
-
-
 
     print('Plotting')
     fig, ax = plt.subplots(1, 1, figsize=(12, 6))

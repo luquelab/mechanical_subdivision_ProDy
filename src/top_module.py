@@ -20,6 +20,6 @@ cluster_stop = int(sys.argv[5])
 cluster_step = int(sys.argv[6])
 
 
-gnm, calphas = make_model(pdb, n_modes, type)
+model, calphas = make_model(pdb, n_modes, type)
 
-calphas, domains = subdivide_model(pdb, cluster_start, cluster_stop, cluster_step)
+calphas, domains = subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=model, calphas_in=calphas)
