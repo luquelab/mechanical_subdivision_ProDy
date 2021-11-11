@@ -12,9 +12,9 @@ import numba as nb
 
 def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=None, calphas_in=None, type='anm'):
     print(os.getcwd())
-    os.chdir("../../results/models")
     print('Loading Model')
     if model_in is None:
+        os.chdir("../../results/models")
         if type == 'gnm':
             model = loadModel(pdb + '_full.gnm.npz')
         elif type == 'anm':
@@ -125,8 +125,7 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=Non
 
     from sklearn.preprocessing import normalize
     print(os.getcwd())
-    os.chdir("../../results/subdivisions/")
-
+    os.chdir("../results/subdivisions/")
     if not os.path.exists(pdb):
         os.mkdir(pdb)
     os.chdir(pdb)

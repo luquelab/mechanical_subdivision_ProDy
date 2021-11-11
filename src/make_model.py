@@ -9,9 +9,8 @@ import psutil
 
 
 def make_model(pdb, n_modes, type):
+
     filename = pdb + '_full.pdb'
-
-
 
     vdb_url = 'https://files.rcsb.org/download/' + pdb + '.pdb.gz'
     print(vdb_url)
