@@ -26,7 +26,7 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=Non
     else:
         calphas = calphas_in
 
-    @nb.njit(parallel=False)
+    @nb.njit(parallel=True)
     def cov(evals, evecs, i, j):
         n_e = evals.shape[0]
         n_d = evecs.shape[1]
