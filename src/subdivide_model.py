@@ -37,11 +37,11 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=Non
             l = evals[n]
             tr1 += 1 / l * (evecs[3 * i, n] * evecs[3 * j, n] + evecs[3 * i + 1, n] * evecs[3 * j + 1, n] + evecs[
                 3 * i + 2, n] * evecs[3 * j + 2, n])
-            tr2 += 1 / l * (evecs[3 * i, n] * evecs[3 * i, n] + evecs[3 * i + 1, n] * evecs[3 * i + 1, n] + evecs[
-                3 * i + 2, n] * evecs[3 * i + 2, n])
-            tr3 += 1 / l * (evecs[3 * j, n] * evecs[3 * j, n] + evecs[3 * j + 1, n] * evecs[3 * j + 1, n] + evecs[
-                3 * j + 2, n] * evecs[3 * j + 2, n])
-        cov = tr1 / np.sqrt(tr2 * tr3)
+            # tr2 += 1 / l * (evecs[3 * i, n] * evecs[3 * i, n] + evecs[3 * i + 1, n] * evecs[3 * i + 1, n] + evecs[
+            #     3 * i + 2, n] * evecs[3 * i + 2, n])
+            # tr3 += 1 / l * (evecs[3 * j, n] * evecs[3 * j, n] + evecs[3 * j + 1, n] * evecs[3 * j + 1, n] + evecs[
+            #     3 * j + 2, n] * evecs[3 * j + 2, n])
+        cov = tr1 # / np.sqrt(tr2 * tr3)
         return cov
 
     def con_c(evals, evecs, c, row, col):
