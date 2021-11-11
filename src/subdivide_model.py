@@ -125,7 +125,12 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=Non
 
     from sklearn.preprocessing import normalize
     print(os.getcwd())
-    os.chdir("../../results/subdivisions/" + pdb)
+    os.chdir("../../results/subdivisions/")
+
+    if not os.path.exists(pdb):
+        os.mkdir(pdb)
+    os.chdir(pdb)
+
     print('Spectral Clustering')
     n_range = np.arange(cluster_start, cluster_stop, cluster_step)
     n_evecs = max(n_range)
