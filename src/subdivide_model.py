@@ -94,11 +94,9 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=Non
     def kmed_embedding(n_range, maps):
         print('Clustering Embedded Points')
 
-        # from sklearnex import unpatch_sklearn
-        # unpatch_sklearn()
 
-        from sklearn_extra.cluster import KMedoids
         from sklearn.cluster import KMeans
+        from sklearn.cluster import k_means
 
         from sklearn.metrics import silhouette_score
 
@@ -108,16 +106,18 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=Non
             n_clusters = n_range[n]
             print('Clusters: ' + str(n_clusters))
 
-            kmed = KMeans(n_clusters=n_clusters, n_init=200, tol=1e-8).fit(maps[:, :n_clusters])
-            labels.append(kmed.labels_)
+            # kmed = KMeans(n_clusters=n_clusters, n_init=200, tol=1e-8).fit(maps[:, :n_clusters])
+            # labels.append(kmed.labels_)
+            _, label, _ = k_means(maps[:, :n_clusters], n_clusters=n_clusters, n_init=200, tol=1e-8)
+
 
             print('Scoring')
-            testScore = silhouette_score(maps[:, :n_clusters], kmed.labels_)
+            testScore = silhouette_score(maps[:, :n_clusters], label)
             scores_km.append(testScore)
             print('Memory Usage: ', psutil.virtual_memory().percent)
 
             print('Saving Results')
-            domains = kmed.labels_
+            domains = label
             nc = str(n_range[n])
             writePDB(pdb + '_' + nc + '_domains.pdb', calphas, beta=domains)
 
@@ -125,7 +125,7 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=Non
 
     from sklearn.preprocessing import normalize
     print(os.getcwd())
-    os.chdir("../../results/subdivisions")
+    os.chdir("../../results/subdivisions/" + pdb)
     print('Spectral Clustering')
     n_range = np.arange(cluster_start, cluster_stop, cluster_step)
     n_evecs = max(n_range)
