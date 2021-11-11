@@ -12,15 +12,13 @@ def make_model(pdb, n_modes, type):
     filename = pdb + '_full.pdb'
 
 
-    os.chdir("../data/capsid_pdbs/")
 
-    if not os.path.exists(filename):
-        vdb_url = 'https://files.rcsb.org/download/' + pdb + '.pdb.gz'
-        print(vdb_url)
-        vdb_filename = wget.download(vdb_url)
-        with gzip.open(vdb_filename, 'rb') as f_in:
-            with open(filename, 'wb') as f_out:
-                shutil.copyfileobj(f_in, f_out)
+    vdb_url = 'https://files.rcsb.org/download/' + pdb + '.pdb.gz'
+    print(vdb_url)
+    vdb_filename = wget.download(vdb_url)
+    with gzip.open(vdb_filename, 'rb') as f_in:
+        with open(filename, 'wb') as f_out:
+            shutil.copyfileobj(f_in, f_out)
 
     capsid = parsePDB(filename, biomol=True)
     calphas = capsid.select('ca').copy()
@@ -54,10 +52,6 @@ def make_model(pdb, n_modes, type):
         anm._vars = 1 / evals
         anm._array = evecs
 
-        print(os.getcwd())
-        os.chdir("../../results/models")
-        print(os.getcwd())
-        print('Saving Model Results')
         saveModel(anm, matrices=True)
         saveAtoms(calphas, filename='calphas_' + pdb)
 
