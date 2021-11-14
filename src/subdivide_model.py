@@ -99,6 +99,7 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=Non
         from sklearn.cluster import k_means
 
         from sklearn.metrics import silhouette_score
+        from sklearn.metrics import davies_bouldin_score
 
         labels = []
         scores_km = []
@@ -112,7 +113,7 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=Non
 
 
             print('Scoring')
-            testScore = silhouette_score(maps[:, :n_clusters], label)
+            testScore = davies_bouldin_score(maps[:, :n_clusters], label)
             scores_km.append(testScore)
             print('Memory Usage: ', psutil.virtual_memory().percent)
 
