@@ -117,7 +117,7 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=Non
             print('Saving Results')
             domains = label
             nc = str(n_range[n])
-            writePDB(pdb + '_' + nc + '_domains.pdb', calphas, beta=domains)
+            writePDB(pdb + '_' + nc + '_domains.pdb', calphas, beta=domains, hybrid36=True)
 
         return labels, scores_km
 
