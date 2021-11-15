@@ -115,9 +115,9 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=Non
             print('Memory Usage: ', psutil.virtual_memory().percent)
 
             print('Saving Results')
-            domains = label
             nc = str(n_range[n])
-            writePDB(pdb + '_' + nc + '_domains.pdb', calphas, beta=domains, hybrid36=True)
+            writePDB(pdb + '_' + nc + '_domains.pdb', calphas, beta=label, hybrid36=True)
+            np.savez(pdb + '_' + nc + '_results', labels=label, score=testScore)
 
         return labels, scores_km
 
