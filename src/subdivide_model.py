@@ -2,16 +2,17 @@ import os
 import time
 
 from prody import *
-from sklearn import cluster
+from sklearnex import patch_sklearn
+patch_sklearn()
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearnex import patch_sklearn
+
 import psutil
 import numba as nb
 
 
 def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=None, calphas_in=None, type='anm'):
-    print(os.getcwd())
+
     print('Loading Model')
     if model_in is None:
         os.chdir("../../results/models")
@@ -84,8 +85,6 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=Non
 
     def embedding(n_evecs, sims):
         print('Performing Spectral Embedding')
-        from sklearnex import patch_sklearn
-        patch_sklearn()
         from sklearn.manifold import spectral_embedding
         X_transformed = spectral_embedding(sims, n_components=n_evecs, drop_first=False, eigen_solver='amg')
         print('Memory Usage: ', psutil.virtual_memory().percent)
@@ -94,8 +93,6 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=Non
     def kmed_embedding(n_range, maps):
         print('Clustering Embedded Points')
 
-
-        from sklearn.cluster import KMeans
         from sklearn.cluster import k_means
 
         from sklearn.metrics import silhouette_score
@@ -145,12 +142,12 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=Non
     print(end - start, ' Seconds')
 
     print('Plotting')
-    fig, ax = plt.subplots(1, 1, figsize=(12, 6))
+    fig, ax = plt.subplots(1, 1, figsize=(16, 6))
     ax.scatter(n_range, scores, marker='D', label=pdb)
     ax.plot(n_range, scores)
-    ax.axvline(x=n_range[np.argmax(scores)], label='Best Score', color='black')
-    nc = str(n_range[np.argmax(scores)])
-    ax.set_xticks(n_range)
+    ax.axvline(x=n_range[np.argmin(scores)], label='Best Score', color='black')
+    nc = str(n_range[np.argmin(scores)])
+    ax.set_xticks(np.arange(cluster_start,cluster_stop,4), Fontsize=6)
     ax.set_xlabel('n_clusters')
     ax.set_ylabel('Silhouette Score')
     ax.legend()
