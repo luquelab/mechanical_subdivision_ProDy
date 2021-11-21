@@ -147,7 +147,7 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=Non
     ax.plot(n_range, scores)
     ax.axvline(x=n_range[np.argmin(scores)], label='Best Score', color='black')
     nc = str(n_range[np.argmin(scores)])
-    ax.set_xticks(np.arange(cluster_start,cluster_stop,4), Fontsize=6)
+    ax.set_xticks(np.arange(cluster_start,cluster_stop,4))
     ax.set_xlabel('n_clusters')
     ax.set_ylabel('Silhouette Score')
     ax.legend()

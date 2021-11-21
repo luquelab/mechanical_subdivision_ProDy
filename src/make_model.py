@@ -32,8 +32,8 @@ def make_model(pdb, n_modes, type):
         print(os.getcwd())
         os.chdir("../../results/models")
         print(os.getcwd())
-        saveModel(gnm,matrices=True)
-        saveAtoms(calphas,filename='calphas_' + pdb)
+        # saveModel(gnm,matrices=True)
+        # saveAtoms(calphas,filename='calphas_' + pdb)
 
         return gnm, calphas
 
@@ -51,8 +51,8 @@ def make_model(pdb, n_modes, type):
         anm._vars = 1 / evals
         anm._array = evecs
 
-        saveModel(anm, matrices=True)
-        saveAtoms(calphas, filename='calphas_' + pdb)
+        # saveModel(anm, matrices=True)
+        # saveAtoms(calphas, filename='calphas_' + pdb)
 
         return anm, calphas
     else:
