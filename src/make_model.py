@@ -5,7 +5,6 @@ import shutil
 import gzip
 from scipy.sparse.linalg import eigsh
 import time
-import psutil
 
 
 def make_model(pdb, n_modes, type):

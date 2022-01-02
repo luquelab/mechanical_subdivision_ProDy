@@ -6,7 +6,6 @@ from sklearnex import patch_sklearn
 patch_sklearn()
 import numpy as np
 import matplotlib.pyplot as plt
-
 import psutil
 import numba as nb
 
@@ -86,7 +85,7 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=Non
     def embedding(n_evecs, sims):
         print('Performing Spectral Embedding')
         from sklearn.manifold import spectral_embedding
-        X_transformed = spectral_embedding(sims, n_components=n_evecs, drop_first=False, eigen_solver='amg')
+        X_transformed = spectral_embedding(sims, n_components=n_evecs, drop_first=False)
         print('Memory Usage: ', psutil.virtual_memory().percent)
         return X_transformed
 
