@@ -93,6 +93,7 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=Non
         print('Clustering Embedded Points')
 
         from sklearn.cluster import k_means
+        from sklearn_extra.cluster import KMedoids
 
         from sklearn.metrics import silhouette_score
         from sklearn.metrics import davies_bouldin_score
@@ -105,8 +106,9 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=Non
 
             # kmed = KMeans(n_clusters=n_clusters, n_init=200, tol=1e-8).fit(maps[:, :n_clusters])
             # labels.append(kmed.labels_)
-            _, label, _ = k_means(maps[:, :n_clusters], n_clusters=n_clusters, n_init=200, tol=1e-8)
-
+            _, label, _ = k_means(maps[:, :n_clusters], n_clusters=n_clusters, n_init=20)
+            # kmed = KMedoids(n_clusters=n_clusters).fit(maps[:, :n_clusters])
+            # _, label, _ = spherical_k_means(maps[:, :n_clusters], n_clusters=n_clusters)
 
             print('Scoring')
             testScore = davies_bouldin_score(maps[:, :n_clusters], label)
