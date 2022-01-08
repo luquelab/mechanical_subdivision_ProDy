@@ -7,80 +7,16 @@ patch_sklearn()
 import numpy as np
 import matplotlib.pyplot as plt
 import psutil
-import numba as nb
+from scipy import sparse
 
 
-def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=None, calphas_in=None, type='anm'):
+def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
 
     print('Loading Model')
-    if model_in is None:
-        os.chdir("../../results/models")
-        if type == 'gnm':
-            model = loadModel(pdb + '_full.gnm.npz')
-        elif type == 'anm':
-            model = loadModel(pdb + '_full.anm.npz')
-    else:
-        model = model_in
-    if calphas_in is None:
-        calphas = loadAtoms('calphas_' + pdb + '.ag.npz')
-    else:
-        calphas = calphas_in
+    sims = sparse.load_npz('../results/models/' + pdb + 'sims.npz')
+    calphas = loadAtoms('../results/models/' + 'calphas_' + pdb + '.ag.npz')
 
-    @nb.njit(parallel=True)
-    def cov(evals, evecs, i, j):
-        n_e = evals.shape[0]
-        n_d = evecs.shape[1]
-        tr1 = 0
-        tr2 = 0
-        tr3 = 0
-        for n in nb.prange(n_e):
-            l = evals[n]
-            tr1 += 1 / l * (evecs[3 * i, n] * evecs[3 * j, n] + evecs[3 * i + 1, n] * evecs[3 * j + 1, n] + evecs[
-                3 * i + 2, n] * evecs[3 * j + 2, n])
-            # tr2 += 1 / l * (evecs[3 * i, n] * evecs[3 * i, n] + evecs[3 * i + 1, n] * evecs[3 * i + 1, n] + evecs[
-            #     3 * i + 2, n] * evecs[3 * i + 2, n])
-            # tr3 += 1 / l * (evecs[3 * j, n] * evecs[3 * j, n] + evecs[3 * j + 1, n] * evecs[3 * j + 1, n] + evecs[
-            #     3 * j + 2, n] * evecs[3 * j + 2, n])
-        cov = tr1 # / np.sqrt(tr2 * tr3)
-        return cov
 
-    def con_c(evals, evecs, c, row, col):
-        n_d = int(evecs.shape[0] / 3)
-        n_e = evals.shape[0]
-
-        for k in range(row.shape[0]):
-            i, j = (row[k], col[k])
-            c[i, j] = cov(evals, evecs, i, j)
-        return c
-
-    def con_d(c, d, row, col):
-        for k in range(row.shape[0]):
-            i, j = (row[k], col[k])
-            d[i, j] = 2 - 2 * c[i, j]
-        return d
-
-    from scipy import sparse
-
-    evals = model.getEigvals()
-    evecs = model.getEigvecs()
-    n_d = int(evecs.shape[0] / 3)
-
-    kirch = model.getKirchhoff().tocoo()
-
-    covariance = sparse.lil_matrix((n_d, n_d))
-    df = sparse.lil_matrix((n_d, n_d))
-    covariance = con_c(evals, evecs, covariance, kirch.row, kirch.col)
-    covariance = covariance.tocsr()
-    d = con_d(covariance, df, kirch.row, kirch.col)
-    d = d.tocsr()
-
-    nnDistFlucts = np.mean(d.data)
-
-    sigma = 1 / (2 * nnDistFlucts ** 2)
-    sims = -sigma * d ** 2
-    data = sims.data
-    data = np.exp(data)
-    sims.data = data
 
     def embedding(n_evecs, sims):
         print('Performing Spectral Embedding')
@@ -89,14 +25,16 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=Non
         print('Memory Usage: ', psutil.virtual_memory().percent)
         return X_transformed
 
-    def kmed_embedding(n_range, maps):
+    def kmean_embedding(n_range, maps):
         print('Clustering Embedded Points')
 
         from sklearn.cluster import k_means
+        from sklearn.metrics import pairwise_distances
         from sklearn_extra.cluster import KMedoids
 
         from sklearn.metrics import silhouette_score
         from sklearn.metrics import davies_bouldin_score
+
 
         labels = []
         scores_km = []
@@ -106,39 +44,71 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=Non
 
             # kmed = KMeans(n_clusters=n_clusters, n_init=200, tol=1e-8).fit(maps[:, :n_clusters])
             # labels.append(kmed.labels_)
-            _, label, _ = k_means(maps[:, :n_clusters], n_clusters=n_clusters, n_init=20)
+            _, label, _ = k_means(maps[:, :n_clusters], n_clusters=n_clusters, n_init=50)
             # kmed = KMedoids(n_clusters=n_clusters).fit(maps[:, :n_clusters])
             # _, label, _ = spherical_k_means(maps[:, :n_clusters], n_clusters=n_clusters)
 
             print('Scoring')
-            testScore = davies_bouldin_score(maps[:, :n_clusters], label)
+            testScore = silhouette_score(maps[:, :n_clusters], label)
             scores_km.append(testScore)
             print('Memory Usage: ', psutil.virtual_memory().percent)
 
             print('Saving Results')
             nc = str(n_range[n])
-            writePDB(pdb + '_' + nc + '_domains.pdb', calphas, beta=label, hybrid36=True)
-            np.savez(pdb + '_' + nc + '_results', labels=label, score=testScore)
+            writePDB('../results/subdivisions/' + pdb + '/' + pdb + '_' + nc + '_domains.pdb', calphas, beta=label, hybrid36=True)
+            np.savez('../results/subdivisions/' + pdb + '/' + pdb + '_' + nc + '_results', labels=label, score=testScore)
+
+        return labels, scores_km
+
+    def clara(n_r, maps):
+        print('Clustering Embedded Points')
+        from pyclustering.cluster.clarans import clarans
+
+        from sklearn.metrics import silhouette_score
+
+
+        labels = []
+        scores_km = []
+        for n in range(len(n_r)):
+            n_clusters = n_r[n]
+            M = maps[:, :n_clusters]
+            print('Clusters: ' + str(n_clusters))
+
+            cl = clarans(M.tolist(), n_clusters, 3, 5)
+            cl.process()
+            label = cl.get_clusters()
+            print(label)
+
+            print('Scoring')
+            testScore = silhouette_score(maps[:, :n_clusters], label, metric='cosine')
+            scores_km.append(testScore)
+            print('Memory Usage: ', psutil.virtual_memory().percent)
+
+            print('Saving Results')
+            nc = str(n_range[n])
+            writePDB('../results/subdivisions/' + pdb + '/' + pdb + '_' + nc + '_domains.pdb', calphas, beta=label, hybrid36=True)
+            np.savez('../results/subdivisions/' + pdb + '/' + pdb + '_' + nc + '_results', labels=label, score=testScore)
 
         return labels, scores_km
 
     from sklearn.preprocessing import normalize
-    print(os.getcwd())
-    os.chdir("../results/subdivisions/")
-    if not os.path.exists(pdb):
-        os.mkdir(pdb)
-    os.chdir(pdb)
+
+    if not os.path.exists('../results/subdivisions/' + pdb):
+        os.mkdir('../results/subdivisions/' + pdb)
 
     print('Spectral Clustering')
     n_range = np.arange(cluster_start, cluster_stop, cluster_step)
     n_evecs = max(n_range)
+
     start = time.time()
     maps = embedding(n_evecs, sims)
     end = time.time()
     print(end - start, ' Seconds')
+
     normalize(maps, copy=False)
+
     start = time.time()
-    labels, scores = kmed_embedding(n_range, maps)
+    labels, scores = kmean_embedding(n_range, maps)
     end = time.time()
     print(end - start, ' Seconds')
 
@@ -146,15 +116,15 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step, model_in=Non
     fig, ax = plt.subplots(1, 1, figsize=(16, 6))
     ax.scatter(n_range, scores, marker='D', label=pdb)
     ax.plot(n_range, scores)
-    ax.axvline(x=n_range[np.argmin(scores)], label='Best Score', color='black')
-    nc = str(n_range[np.argmin(scores)])
+    ax.axvline(x=n_range[np.argmax(scores)], label='Best Score', color='black')
+    nc = str(n_range[np.argmax(scores)])
     ax.set_xticks(np.arange(cluster_start,cluster_stop,4))
     ax.set_xlabel('n_clusters')
     ax.set_ylabel('Silhouette Score')
     ax.legend()
     fig.tight_layout()
     print(pdb + '_' + nc + '_domains.png')
-    plt.savefig(pdb + '_' + nc + '_domains.png')
+    plt.savefig('../results/subdivisions/' + pdb + '_' + nc + '_domains.png')
     plt.show()
 
     return calphas, labels
