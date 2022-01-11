@@ -10,9 +10,8 @@ import numpy as np
 from scipy import sparse
 
 def make_model(pdb, n_modes):
-
+    os.chdir('../data/capsid_pdbs')
     filename = pdb + '_full.pdb'
-
     if not os.path.exists(filename):
         vdb_url = 'https://files.rcsb.org/download/' + pdb + '.pdb.gz'
         print(vdb_url)
@@ -23,6 +22,8 @@ def make_model(pdb, n_modes):
 
     capsid = parsePDB(filename, biomol=True)
     calphas = capsid.select('ca').copy()
+
+    os.chdir('../../src')
 
     anm = ANM(pdb + '_full')
     anm.buildHessian(calphas, cutoff=10.0, kdtree=True, sparse=True)

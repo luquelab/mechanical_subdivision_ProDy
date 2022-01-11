@@ -21,6 +21,8 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
     def embedding(n_evecs, sims):
         print('Performing Spectral Embedding')
         from sklearn.manifold import spectral_embedding
+        from scipy.sparse.csgraph import connected_components
+        print(connected_components(sims))
         X_transformed = spectral_embedding(sims, n_components=n_evecs, drop_first=False)
         print('Memory Usage: ', psutil.virtual_memory().percent)
         return X_transformed
@@ -44,7 +46,7 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
 
             # kmed = KMeans(n_clusters=n_clusters, n_init=200, tol=1e-8).fit(maps[:, :n_clusters])
             # labels.append(kmed.labels_)
-            _, label, _ = k_means(maps[:, :n_clusters], n_clusters=n_clusters, n_init=50)
+            _, label, _ = k_means(maps[:, :n_clusters], n_clusters=n_clusters, n_init=10)
             # kmed = KMedoids(n_clusters=n_clusters).fit(maps[:, :n_clusters])
             # _, label, _ = spherical_k_means(maps[:, :n_clusters], n_clusters=n_clusters)
 
@@ -55,43 +57,19 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
 
             print('Saving Results')
             nc = str(n_range[n])
-            writePDB('../results/subdivisions/' + pdb + '/' + pdb + '_' + nc + '_domains.pdb', calphas, beta=label, hybrid36=True)
             np.savez('../results/subdivisions/' + pdb + '/' + pdb + '_' + nc + '_results', labels=label, score=testScore)
+            labels.append(label)
+
+        best = np.argpartition(scores_km, -5)[-5:]  # indices of 4 best scores
+        for ind in best:
+            writePDB('../results/subdivisions/' + pdb + '/' + pdb + '_' + str(n_range[ind]) + '_domains.pdb', calphas,
+                     beta=labels[ind],
+                     hybrid36=True)
 
         return labels, scores_km
 
-    def clara(n_r, maps):
-        print('Clustering Embedded Points')
-        from pyclustering.cluster.clarans import clarans
-
-        from sklearn.metrics import silhouette_score
 
 
-        labels = []
-        scores_km = []
-        for n in range(len(n_r)):
-            n_clusters = n_r[n]
-            M = maps[:, :n_clusters]
-            print('Clusters: ' + str(n_clusters))
-
-            cl = clarans(M.tolist(), n_clusters, 3, 5)
-            cl.process()
-            label = cl.get_clusters()
-            print(label)
-
-            print('Scoring')
-            testScore = silhouette_score(maps[:, :n_clusters], label, metric='cosine')
-            scores_km.append(testScore)
-            print('Memory Usage: ', psutil.virtual_memory().percent)
-
-            print('Saving Results')
-            nc = str(n_range[n])
-            writePDB('../results/subdivisions/' + pdb + '/' + pdb + '_' + nc + '_domains.pdb', calphas, beta=label, hybrid36=True)
-            np.savez('../results/subdivisions/' + pdb + '/' + pdb + '_' + nc + '_results', labels=label, score=testScore)
-
-        return labels, scores_km
-
-    from sklearn.preprocessing import normalize
 
     if not os.path.exists('../results/subdivisions/' + pdb):
         os.mkdir('../results/subdivisions/' + pdb)
@@ -104,7 +82,8 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
     maps = embedding(n_evecs, sims)
     end = time.time()
     print(end - start, ' Seconds')
-
+    print(maps.shape)
+    from sklearn.preprocessing import normalize
     normalize(maps, copy=False)
 
     start = time.time()
@@ -128,3 +107,42 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
     plt.show()
 
     return calphas, labels
+
+
+# unused
+
+def clara(n_r, maps):
+    print('Clustering Embedded Points')
+    from pyclustering.cluster.clarans import clarans
+
+    from sklearn.metrics import silhouette_score
+
+
+    labels = []
+    scores_km = []
+    for n in range(len(n_r)):
+        n_clusters = n_r[n]
+        M = maps[:, :n_clusters]
+        print('Clusters: ' + str(n_clusters))
+
+        cl = clarans(M.tolist(), n_clusters, 3, 5)
+        cl.process()
+        label = cl.get_clusters()
+        print(label)
+
+        print('Scoring')
+        testScore = silhouette_score(maps[:, :n_clusters], label, metric='cosine')
+        scores_km.append(testScore)
+        print('Memory Usage: ', psutil.virtual_memory().percent)
+
+        print('Saving Results')
+        nc = str(n_range[n])
+        np.savez('../results/subdivisions/' + pdb + '/' + pdb + '_' + nc + '_results', labels=label, score=testScore)
+
+    best = np.argpartition(scores_km, -5)[-5:] # indices of 4 best scores
+    for ind in best:
+        writePDB('../results/subdivisions/' + pdb + '/' + pdb + '_' + n_r[ind] + '_domains.pdb', calphas, beta=labels[ind],
+                 hybrid36=True)
+
+
+    return labels, scores_km
