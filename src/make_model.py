@@ -8,9 +8,9 @@ import time
 import numba as nb
 import numpy as np
 from scipy import sparse
-from input import *
 
 def make_model(pdb, n_modes):
+    from input import rebuild_hessian, rebuild_modes
     os.chdir('../data/capsid_pdbs')
     filename = pdb + '_full.pdb'
     if not os.path.exists(filename):
@@ -31,7 +31,7 @@ def make_model(pdb, n_modes):
         if not os.path.exists('../results/models/' + pdb + 'hess.npz'):
             print('No hessian found. Building Hessian.')
         else:
-            anm.setHessian(sparse.load_npz('../results/models/' + pdb + 'hess.npz'))
+            anm._hessian = sparse.load_npz('../results/models/' + pdb + 'hess.npz')
             anm._kirchhoff = sparse.load_npz('../results/models/' + pdb + 'kirch.npz')
     else:
         anm.buildHessian(calphas, cutoff=10.0, kdtree=True, sparse=True)
@@ -123,5 +123,5 @@ def con_c(evals, evecs, c, row, col):
 def con_d(c, d, row, col):
     for k in range(row.shape[0]):
         i, j = (row[k], col[k])
-        d[i, j] = 2 - 2 * c[i, j]
+        d[i, j] = c[i,i] + c[j,j] - 2 * c[i, j]
     return d
