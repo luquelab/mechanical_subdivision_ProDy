@@ -28,11 +28,11 @@ def make_model(pdb, n_modes):
 
     anm = ANM(pdb + '_full')
     if not rebuild_hessian:
-        if not os.path.exists('../results/models/' + pdb + 'hess.npz'):
+        if not os.path.exists('../results/models/' + pdb + 'hess.npz') or not os.path.exists('../results/models/' + pdb + 'kirch.npz'):
             print('No hessian found. Building Hessian.')
         else:
             anm._hessian = sparse.load_npz('../results/models/' + pdb + 'hess.npz')
-            anm._kirchhoff = sparse.load_npz('../results/models/' + pdb + 'kirch.npz')
+            kirch = sparse.load_npz('../results/models/' + pdb + 'kirch.npz')
     else:
         anm.buildHessian(calphas, cutoff=10.0, kdtree=True, sparse=True)
         sparse.save_npz('../results/models/' + pdb + 'hess.npz', anm.getHessian())
@@ -70,7 +70,7 @@ def make_model(pdb, n_modes):
 
     n_d = int(evecs.shape[0] / 3)
 
-    kirch = model.getKirchhoff().tocoo()
+    kirch = kirch.tocoo()
 
     covariance = sparse.lil_matrix((n_d, n_d))
     df = sparse.lil_matrix((n_d, n_d))
