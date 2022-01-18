@@ -8,7 +8,7 @@ from subdivide_model import subdivide_model
 from input import *
 
 
-
-model, calphas = make_model(pdb, n_modes)
+if rebuild_model:
+    model, calphas = make_model(pdb, n_modes)
 
 calphas, domains = subdivide_model(pdb, cluster_start, cluster_stop, cluster_step)

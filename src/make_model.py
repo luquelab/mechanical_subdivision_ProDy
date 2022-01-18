@@ -8,6 +8,7 @@ import time
 import numba as nb
 import numpy as np
 from scipy import sparse
+from input import *
 
 def make_model(pdb, n_modes):
     os.chdir('../data/capsid_pdbs')
@@ -26,18 +27,36 @@ def make_model(pdb, n_modes):
     os.chdir('../../src')
 
     anm = ANM(pdb + '_full')
-    anm.buildHessian(calphas, cutoff=10.0, kdtree=True, sparse=True)
-    sparse.save_npz('../results/models/' + pdb + 'hess.npz', anm.getHessian())
-    print('Calculating Normal Modes')
-    start = time.time()
-    evals, evecs = eigsh(anm.getHessian(), k=n_modes, sigma=1E-5, which='LA')
-    print(evals)
-    end = time.time()
-    print(end - start)
-    anm._eigvals = evals
-    anm._n_modes = len(evals)
-    anm._eigvecs = evecs
-    anm._array = evecs
+    if not rebuild_hessian:
+        if not os.path.exists('../results/models/' + pdb + 'hess.npz'):
+            print('No hessian found. Building Hessian.')
+        else:
+            anm.setHessian(sparse.load_npz('../results/models/' + pdb + 'hess.npz'))
+            anm._kirchhoff = sparse.load_npz('../results/models/' + pdb + 'kirch.npz')
+    else:
+        anm.buildHessian(calphas, cutoff=10.0, kdtree=True, sparse=True)
+        sparse.save_npz('../results/models/' + pdb + 'hess.npz', anm.getHessian())
+        sparse.save_npz('../results/models/' + pdb + 'kirch.npz', anm.getKirchhoff())
+
+    if not rebuild_modes:
+        if not os.path.exists('../results/models/' + pdb + 'hess.npz'):
+            print('No evecs found. Calculating')
+        else:
+            anm = loadModel('../results/models/' + pdb + 'anm.npz')
+            evals = anm.getEigvals()
+            evecs = anm.getEigvecs()
+    else:
+        print('Calculating Normal Modes')
+        start = time.time()
+        evals, evecs = eigsh(anm.getHessian(), k=n_modes, sigma=1E-5, which='LA')
+        print(evals)
+        end = time.time()
+        print(end - start)
+        anm._eigvals = evals
+        anm._n_modes = len(evals)
+        anm._eigvecs = evecs
+        anm._array = evecs
+        saveModel(anm, filename='../results/models/' + pdb + 'anm.npz')
 
     import matplotlib.pyplot as plt
     print('Plotting')
@@ -60,7 +79,7 @@ def make_model(pdb, n_modes):
     d = con_d(covariance, df, kirch.row, kirch.col)
     d = d.tocsr()
 
-    nnDistFlucts = np.mean(d.data)
+    nnDistFlucts = np.mean(np.sqrt(d.data))
 
     sigma = 1 / (2 * nnDistFlucts ** 2)
     sims = -sigma * d ** 2
