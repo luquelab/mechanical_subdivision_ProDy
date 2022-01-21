@@ -10,7 +10,7 @@ import numpy as np
 from scipy import sparse
 
 def make_model(pdb, n_modes):
-    from input import rebuild_hessian, rebuild_modes
+    from input import rebuild_hessian, rebuild_modes, sample
     os.chdir('../data/capsid_pdbs')
     filename = pdb + '_full.pdb'
     if not os.path.exists(filename):
@@ -37,6 +37,7 @@ def make_model(pdb, n_modes):
         anm.buildHessian(calphas, cutoff=10.0, kdtree=True, sparse=True)
         sparse.save_npz('../results/models/' + pdb + 'hess.npz', anm.getHessian())
         sparse.save_npz('../results/models/' + pdb + 'kirch.npz', anm.getKirchhoff())
+        kirch = anm.getKirchhoff()
 
     if not rebuild_modes:
         if not os.path.exists('../results/models/' + pdb + 'hess.npz'):
@@ -71,14 +72,21 @@ def make_model(pdb, n_modes):
     n_d = int(evecs.shape[0] / 3)
 
     kirch = kirch.tocoo()
+    if sample:
+        from sampling import calcSample
+        coords = calphas.getCoords()
+        d = calcSample(coords, evals, evecs, 2000, kirch.row, kirch.col)
+        n_d = int(evecs.shape[0] / 3)
+        d = sparse.coo_matrix((d, (kirch.row, kirch.col)), shape=(n_d, n_d))
+    else:
+        covariance = sparse.lil_matrix((n_d, n_d))
+        df = sparse.lil_matrix((n_d, n_d))
+        covariance = con_c(evals, evecs, covariance, kirch.row, kirch.col)
+        covariance = covariance.tocsr()
+        d = con_d(covariance, df, kirch.row, kirch.col)
 
-    covariance = sparse.lil_matrix((n_d, n_d))
-    df = sparse.lil_matrix((n_d, n_d))
-    covariance = con_c(evals, evecs, covariance, kirch.row, kirch.col)
-    covariance = covariance.tocsr()
-    d = con_d(covariance, df, kirch.row, kirch.col)
     d = d.tocsr()
-
+    d.eliminate_zeros()
     nnDistFlucts = np.mean(np.sqrt(d.data))
 
     sigma = 1 / (2 * nnDistFlucts ** 2)

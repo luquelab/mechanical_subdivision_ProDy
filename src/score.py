@@ -6,7 +6,9 @@ def median_score(coords, centroids):
     from sklearn.metrics import pairwise_distances
     dists = pairwise_distances(coords,centroids)
     d2min = np.partition(dists, kth=2)[:,:2]
-    score = np.mean(d2min[:,1]/d2min[:,0])
+    b = np.mean(d2min[:,1])
+    a = np.mean(d2min[:,0])
+    score = b/a
     return score
 
 def cluster_types(labels):

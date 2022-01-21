@@ -50,7 +50,8 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
 
             # kmed = KMeans(n_clusters=n_clusters, n_init=200, tol=1e-8).fit(maps[:, :n_clusters])
             # labels.append(kmed.labels_)
-            centroids, label, _ = k_means(maps[:, :n_clusters], n_clusters=n_clusters, n_init=10)
+            centroids, label, _, n_iter = k_means(maps[:, :n_clusters], n_clusters=n_clusters, n_init=n_clusters, tol=1e-8, return_n_iter=True)
+            print(n_iter)
             # kmed = KMedoids(n_clusters=n_clusters).fit(maps[:, :n_clusters])
             # _, label, _ = spherical_k_means(maps[:, :n_clusters], n_clusters=n_clusters)
 
@@ -116,7 +117,7 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
     ax[0].legend()
     fig.tight_layout()
     print(pdb + '_' + nc + '_domains.png')
-    # plt.savefig('../results/subdivisions/' + pdb + '_' + nc + '_domains.png')
+    plt.savefig('../results/subdivisions/' + pdb + '_' + nc + '_domains.png')
     plt.show()
 
     return calphas, labels
