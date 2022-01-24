@@ -19,12 +19,13 @@ def cluster_types(labels):
 
 def plotScores(pdb, n_range):
     import matplotlib.pyplot as plt
+    import numpy as np
     scores = []
     vars = []
     ntypes = []
     for i in range(len(n_range)):
         nc = n_range[i]
-        results = np.load('../results/subdivisions/' + pdb + '/' + pdb + '_' + nc + '_results')
+        results = np.load('../results/subdivisions/' + pdb + '/' + pdb + '_' + str(nc) + '_results.npz')
         score = results['score']
         ntype = results['ntypes']
         var = results['var']

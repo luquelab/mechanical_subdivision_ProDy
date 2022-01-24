@@ -1,11 +1,12 @@
-pdb = '1mvm'
-n_modes = 60
-cluster_start = 12
-cluster_stop = 62
+pdb = '5vf3'
+n_modes = 780
+onlyTs = True
+T = 7
+cluster_start = 132
+cluster_stop = 722
 cluster_step = 2
 rebuild_model = True
 rebuild_hessian = True
 rebuild_modes = True
+prebuilt_embedding = True
 sample = False
-
-
