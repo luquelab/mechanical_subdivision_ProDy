@@ -1,6 +1,21 @@
 import numpy as np
 from sklearn.metrics import pairwise_distances
 
+def calcCentroids(X, labels, n_clusters):
+    centroids = []
+    for i in range(n_clusters):
+        mask = (labels==i)
+        if not np.any(mask):
+            print('Some clusters unassigned')
+            centroids.append((np.zeros(n_clusters)))
+        else:
+            clust = X[mask,:]
+            cent = np.mean(clust, axis=0)
+            centroids.append(cent)
+
+    return np.array(centroids)
+
+
 
 def median_score(coords, centroids):
     from sklearn.metrics import pairwise_distances

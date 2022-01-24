@@ -9,11 +9,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from mpl_toolkits.mplot3d import Axes3D
-pdb = '6xgq'
-nc = 212
+pdb = '3j0b'
+nc = 30
 cm = plt.get_cmap("viridis")
 
-results = np.load('./' + pdb + '/' + pdb + '_' + str(nc) + '_results.npz')
+results = np.load('./' + pdb + '/' + pdb + '_' + str(nc) + '_results_mbk.npz')
 labels = results['labels']
 calphas = loadAtoms('../models/' + 'calphas_' + pdb + '.ag.npz')
 coords = calphas.getCoords()

@@ -46,7 +46,7 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
         np.save('../results/models/' + pdb + 'embedding.npy', maps)
 
     start = time.time()
-    labels, scores, var, ntypes = kmean_embedding(n_range, maps, calphas)
+    labels, scores, var, ntypes, labels_mbk, scores_mbk, var_mbk, ntypes_mbk = kmean_embedding(n_range, maps, calphas)
     end = time.time()
     print(end - start, ' Seconds')
 
@@ -54,11 +54,17 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
     fig, ax = plt.subplots(3, 1, figsize=(18, 10), sharex=True)
     ax[0].scatter(n_range, scores, marker='D', label=pdb)
     ax[0].plot(n_range, scores)
+    ax[0].scatter(n_range, scores_mbk, marker='D', label='mbk')
+    ax[0].plot(n_range, scores_mbk)
     ax[1].plot(n_range, ntypes)
     ax[1].scatter(n_range, ntypes)
+    ax[1].plot(n_range, ntypes_mbk)
+    ax[1].scatter(n_range, ntypes_mbk)
     ax[1].set_ylabel('# of unique clusters')
     ax[2].plot(n_range, var)
     ax[2].scatter(n_range, var)
+    ax[2].plot(n_range, var_mbk)
+    ax[2].scatter(n_range, var_mbk)
     ax[2].set_ylabel('Variance In Cluster Size')
     ax[0].axvline(x=n_range[np.argmax(scores)], label='Best Score', color='black')
     nc = str(n_range[np.argmax(scores)])
@@ -89,40 +95,67 @@ def kmean_embedding(n_range, maps, calphas):
     print('Clustering Embedded Points')
 
     from sklearn.cluster import k_means
+    from sklearn.cluster import MiniBatchKMeans, AgglomerativeClustering
     #from sklearn.metrics import pairwise_distances
     # from sklearn_extra.cluster import KMedoids
 
     #from sklearn.metrics import silhouette_score
-    #from sklearn.metrics import davies_bouldin_score
+    from sklearn.metrics import davies_bouldin_score
     from score import median_score, cluster_types
+    from score import calcCentroids
 
 
     labels = []
+    labels_mbk = []
     scores_km = []
+    scores_mbk = []
     variances = []
+    variances_mbk = []
     numtypes = []
+    numtypes_mbk = []
     for n in range(len(n_range)):
         n_clusters = n_range[n]
         print('Clusters: ' + str(n_clusters))
+        start1 = time.time()
+        # mbk = MiniBatchKMeans(n_clusters=n_clusters, batch_size=4096, n_init=10, reassignment_ratio=0.15, max_no_improvement=10).fit(maps[:, :n_clusters])
+        # mbk = DBSCAN(n_clusters=n_clusters, eps=0.25).fit(maps[:, :n_clusters])
+        # label_mbk = mbk.labels_
+        # centroids_mbk = mbk.cluster_centers_
+        label_mbk = discretize(maps[:, :n_clusters])
+        labels_mbk.append(label_mbk)
+        cl = np.unique(label_mbk)
+        print(cl.shape)
 
-        # kmed = KMeans(n_clusters=n_clusters, n_init=200, tol=1e-8).fit(maps[:, :n_clusters])
-        # labels.append(kmed.labels_)
-        centroids, label, _, n_iter = k_means(maps[:, :n_clusters], n_clusters=n_clusters, n_init=n_clusters, tol=1e-8, return_n_iter=True)
-        print(n_iter)
+        centroids_mbk = calcCentroids(maps[:, :n_clusters], label_mbk, n_clusters)
+        end1 = time.time()
+
+        start2 = time.time()
+        centroids, label, _, n_iter = k_means(maps[:, :n_clusters], n_clusters=n_clusters, n_init=10, tol=1e-8, return_n_iter=True)
+        end2 = time.time()
+        print('mbk improvement:' + str((end1-start1)/(end2-start2)))
+        # print(n_iter)
         # kmed = KMedoids(n_clusters=n_clusters).fit(maps[:, :n_clusters])
         # _, label, _ = spherical_k_means(maps[:, :n_clusters], n_clusters=n_clusters)
 
         print('Scoring')
         testScore = median_score(maps[:, :n_clusters], centroids)
+        testScore_mbk = median_score(maps[:, :n_clusters], centroids_mbk)
         scores_km.append(testScore)
         var, ntypes = cluster_types(label)
         variances.append(var)
         numtypes.append(ntypes)
+
+        scores_mbk.append(testScore_mbk)
+        var_mbk, ntypes_mbk = cluster_types(label_mbk)
+        variances_mbk.append(var_mbk)
+        numtypes_mbk.append(ntypes_mbk)
         print('Memory Usage: ', psutil.virtual_memory().percent)
 
         print('Saving Results')
         nc = str(n_range[n])
         np.savez('../results/subdivisions/' + pdb + '/' + pdb + '_' + nc + '_results', labels=label, score=testScore, var=var, ntypes=ntypes,n=n)
+        np.savez('../results/subdivisions/' + pdb + '/' + pdb + '_' + nc + '_results_mbk', labels=label_mbk, score=testScore_mbk,
+                 var=var_mbk, ntypes=ntypes_mbk, n=n)
         labels.append(label)
 
     best = np.argpartition(scores_km, -5)[-5:]  # indices of 4 best scores
@@ -131,4 +164,132 @@ def kmean_embedding(n_range, maps, calphas):
                  beta=labels[ind],
                  hybrid36=True)
 
-    return labels, scores_km, variances, numtypes
+    return labels, scores_km, variances, numtypes, labels_mbk, scores_mbk, variances_mbk, numtypes_mbk
+
+
+def discretize(
+    vectors, *, copy=False, max_svd_restarts=30, n_iter_max=20, random_state=None
+):
+    """Search for a partition matrix which is closest to the eigenvector embedding.
+    This implementation was proposed in [1]_.
+    Parameters
+    ----------
+    vectors : array-like of shape (n_samples, n_clusters)
+        The embedding space of the samples.
+    copy : bool, default=True
+        Whether to copy vectors, or perform in-place normalization.
+    max_svd_restarts : int, default=30
+        Maximum number of attempts to restart SVD if convergence fails
+    n_iter_max : int, default=30
+        Maximum number of iterations to attempt in rotation and partition
+        matrix search if machine precision convergence is not reached
+    random_state : int, RandomState instance, default=None
+        Determines random number generation for rotation matrix initialization.
+        Use an int to make the randomness deterministic.
+        See :term:`Glossary <random_state>`.
+    Returns
+    -------
+    labels : array of integers, shape: n_samples
+        The labels of the clusters.
+    References
+    ----------
+    .. [1] `Multiclass spectral clustering, 2003
+           Stella X. Yu, Jianbo Shi
+           <https://www1.icsi.berkeley.edu/~stellayu/publication/doc/2003kwayICCV.pdf>`_
+    Notes
+    -----
+    The eigenvector embedding is used to iteratively search for the
+    closest discrete partition.  First, the eigenvector embedding is
+    normalized to the space of partition matrices. An optimal discrete
+    partition matrix closest to this normalized embedding multiplied by
+    an initial rotation is calculated.  Fixing this discrete partition
+    matrix, an optimal rotation matrix is calculated.  These two
+    calculations are performed until convergence.  The discrete partition
+    matrix is returned as the clustering solution.  Used in spectral
+    clustering, this method tends to be faster and more robust to random
+    initialization than k-means.
+    """
+
+    from scipy.sparse import csc_matrix
+    from scipy.linalg import LinAlgError
+    from sklearn.utils import check_random_state, as_float_array
+
+    random_state = check_random_state(random_state)
+
+    vectors = as_float_array(vectors, copy=copy)
+
+    eps = np.finfo(float).eps
+    n_samples, n_components = vectors.shape
+
+    # Normalize the eigenvectors to an equal length of a vector of ones.
+    # Reorient the eigenvectors to point in the negative direction with respect
+    # to the first element.  This may have to do with constraining the
+    # eigenvectors to lie in a specific quadrant to make the discretization
+    # search easier.
+    norm_ones = np.sqrt(n_samples)
+    for i in range(vectors.shape[1]):
+        vectors[:, i] = (vectors[:, i] / np.linalg.norm(vectors[:, i])) * norm_ones
+        if vectors[0, i] != 0:
+            vectors[:, i] = -1 * vectors[:, i] * np.sign(vectors[0, i])
+
+    # Normalize the rows of the eigenvectors.  Samples should lie on the unit
+    # hypersphere centered at the origin.  This transforms the samples in the
+    # embedding space to the space of partition matrices.
+    vectors = vectors / np.sqrt((vectors ** 2).sum(axis=1))[:, np.newaxis]
+
+    svd_restarts = 0
+    has_converged = False
+
+    # If there is an exception we try to randomize and rerun SVD again
+    # do this max_svd_restarts times.
+    while (svd_restarts < max_svd_restarts) and not has_converged:
+
+        # Initialize first column of rotation matrix with a row of the
+        # eigenvectors
+        rotation = np.zeros((n_components, n_components))
+        rotation[:, 0] = vectors[random_state.randint(n_samples), :].T
+
+        # To initialize the rest of the rotation matrix, find the rows
+        # of the eigenvectors that are as orthogonal to each other as
+        # possible
+        c = np.zeros(n_samples)
+        for j in range(1, n_components):
+            # Accumulate c to ensure row is as orthogonal as possible to
+            # previous picks as well as current one
+            c += np.abs(np.dot(vectors, rotation[:, j - 1]))
+            rotation[:, j] = vectors[c.argmin(), :].T
+
+        last_objective_value = 0.0
+        n_iter = 0
+
+        while not has_converged:
+            n_iter += 1
+
+            t_discrete = np.dot(vectors, rotation)
+
+            labels = t_discrete.argmax(axis=1)
+            vectors_discrete = csc_matrix(
+                (np.ones(len(labels)), (np.arange(0, n_samples), labels)),
+                shape=(n_samples, n_components),
+            )
+
+            t_svd = vectors_discrete.T * vectors
+
+            try:
+                U, S, Vh = np.linalg.svd(t_svd)
+            except LinAlgError:
+                svd_restarts += 1
+                print("SVD did not converge, randomizing and trying again")
+                break
+
+            ncut_value = 2.0 * (n_samples - S.sum())
+            if (abs(ncut_value - last_objective_value) < eps) or (n_iter > n_iter_max):
+                has_converged = True
+            else:
+                # otherwise calculate rotation and continue
+                last_objective_value = ncut_value
+                rotation = np.dot(Vh.T, U.T)
+
+    if not has_converged:
+        raise LinAlgError("SVD did not converge")
+    return labels
