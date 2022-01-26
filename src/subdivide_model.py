@@ -46,12 +46,14 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
         np.save('../results/models/' + pdb + 'embedding.npy', maps)
 
     start = time.time()
-    labels_d, scores_d, var_d, ntypes_d = kmean_embedding(n_range, maps, calphas)
+    from input import cluster_method as method
+    labels_d, scores_d, var_d, ntypes_d = cluster_embedding(n_range, maps, calphas, method)
     end = time.time()
     print(end - start, ' Seconds')
 
     print('Plotting')
     fig, ax = plt.subplots(3, 1, figsize=(18, 10), sharex=True)
+    fig.suptitle(pdb)
     ax[0].scatter(n_range, scores_d, marker='D', label='mbk')
     ax[0].plot(n_range, scores_d)
     ax[1].plot(n_range, ntypes_d)
@@ -85,16 +87,16 @@ def embedding(n_evecs, sims):
     print('Memory Usage: ', psutil.virtual_memory().percent)
     return X_transformed
 
-def kmean_embedding(n_range, maps, calphas):
+def cluster_embedding(n_range, maps, calphas, method):
     print('Clustering Embedded Points')
 
-    #from sklearn.cluster import k_means
+    from sklearn.cluster import k_means
     #from sklearn.cluster import MiniBatchKMeans, AgglomerativeClustering
     #from sklearn.metrics import pairwise_distances
     # from sklearn_extra.cluster import KMedoids
 
     #from sklearn.metrics import silhouette_score
-    #from sklearn.metrics import davies_bouldin_score
+    from sklearn.metrics import davies_bouldin_score
     from score import median_score, cluster_types
     from score import calcCentroids
 
@@ -111,12 +113,19 @@ def kmean_embedding(n_range, maps, calphas):
         # mbk = DBSCAN(n_clusters=n_clusters, eps=0.25).fit(maps[:, :n_clusters])
         # label_d = mbk.labels_
         # centroids_d = mbk.cluster_centers_
-        label_d = discretize(maps[:, :n_clusters])
+        print(method)
+        if method == 'discretize':
+            label_d = discretize(maps[:, :n_clusters])
+            centroids_d = calcCentroids(maps[:, :n_clusters], label_d, n_clusters)
+        elif method == 'kmeans':
+            centroids_d, label_d, _, n_iter = k_means(maps[:, :n_clusters], n_clusters=n_clusters, n_init=10, tol=1e-8,
+                                                  return_n_iter=True)
+        else:
+            print('method should be kmeans or discretize. Defaulting to kmeans')
+
         labels_d.append(label_d)
         cl = np.unique(label_d)
         print(cl.shape)
-
-        centroids_d = calcCentroids(maps[:, :n_clusters], label_d, n_clusters)
         end1 = time.time()
 
         # start2 = time.time()
@@ -130,6 +139,7 @@ def kmean_embedding(n_range, maps, calphas):
         print('Scoring')
         # testScore = median_score(maps[:, :n_clusters], centroids)
         testScore_d = median_score(maps[:, :n_clusters], centroids_d)
+        # testScore_d = davies_bouldin_score(maps[:, :n_clusters], label_d)
         # scores_km.append(testScore)
         # var, ntypes = cluster_types(label)
         # variances.append(var)
@@ -235,7 +245,7 @@ def discretize(
         # Initialize first column of rotation matrix with a row of the
         # eigenvectors
         rotation = np.zeros((n_components, n_components))
-        rotation[:, 0] = vectors[random_state.randint(n_samples), :].T
+        rotation[:, 0] = vectors[random_state.randint(1, n_samples), :].T
 
         # To initialize the rest of the rotation matrix, find the rows
         # of the eigenvectors that are as orthogonal to each other as

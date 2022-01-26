@@ -45,8 +45,11 @@ def make_model(pdb, n_modes):
             print('No evecs found. Calculating')
         else:
             anm = loadModel('../results/models/' + pdb + 'anm.npz')
-            evals = anm.getEigvals()
-            evecs = anm.getEigvecs()
+            print('Slicing Modes up to ' + str(n_modes))
+            print()
+            evals = anm.getEigvals()[:n_modes].copy()
+            evecs = anm.getEigvecs()[:,:n_modes].copy()
+            print(evecs.shape)
     else:
         print('Calculating Normal Modes')
         start = time.time()
@@ -73,13 +76,16 @@ def make_model(pdb, n_modes):
     n_d = int(evecs.shape[0] / 3)
 
     kirch = kirch.tocoo()
+    print('Calculating Covariance Matrix')
     if sample:
         from sampling import calcSample
+        print('Sampling Method')
         coords = calphas.getCoords()
         d = calcSample(coords, evals, evecs, 2000, kirch.row, kirch.col)
         n_d = int(evecs.shape[0] / 3)
         d = sparse.coo_matrix((d, (kirch.row, kirch.col)), shape=(n_d, n_d))
     else:
+        print('Direct Calculation Method')
         covariance = sparse.lil_matrix((n_d, n_d))
         df = sparse.lil_matrix((n_d, n_d))
         covariance = con_c(evals, evecs, covariance, kirch.row, kirch.col)
