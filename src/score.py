@@ -7,7 +7,7 @@ def calcCentroids(X, labels, n_clusters):
         mask = (labels==i)
         if not np.any(mask):
             print('Some clusters unassigned')
-            centroids.append((np.zeros(n_clusters)))
+            centroids.append((np.random.rand(n_clusters)))
         else:
             clust = X[mask,:]
             cent = np.mean(clust, axis=0)
@@ -40,7 +40,7 @@ def plotScores(pdb, n_range):
     ntypes = []
     for i in range(len(n_range)):
         nc = n_range[i]
-        results = np.load('../results/subdivisions/' + pdb + '/' + pdb + '_' + str(nc) + '_results.npz')
+        results = np.load('../results/subdivisions/' + pdb + '/' + pdb + '_' + str(nc) + '_results_d.npz')
         score = results['score']
         ntype = results['ntypes']
         var = results['var']
@@ -62,7 +62,7 @@ def plotScores(pdb, n_range):
     ax[2].set_ylabel('Variance In Cluster Size')
     ax[0].axvline(x=n_range[np.argmax(scores)], label='Best Score', color='black')
     nc = str(n_range[np.argmax(scores)])
-    ax[0].set_xticks(n_range)
+    # ax[0].set_xticks(n_range)
     ax[2].set_xlabel('n_clusters')
     ax[0].set_ylabel('Silhouette Score')
     ax[0].legend()

@@ -25,7 +25,7 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
     print('Spectral Clustering')
     from input import onlyTs, T
     if onlyTs:
-        n_range = np.array([10.*T+2, 20.*T, 30*T, 30.*T+2, 60*T, 60*T+2])
+        n_range = np.array([10*T+2, 20*T, 30*T, 30*T+2, 60*T])
     else:
         n_range = np.arange(cluster_start, cluster_stop+cluster_step, cluster_step)
     n_evecs = max(n_range)
@@ -46,28 +46,22 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
         np.save('../results/models/' + pdb + 'embedding.npy', maps)
 
     start = time.time()
-    labels, scores, var, ntypes, labels_mbk, scores_mbk, var_mbk, ntypes_mbk = kmean_embedding(n_range, maps, calphas)
+    labels_d, scores_d, var_d, ntypes_d = kmean_embedding(n_range, maps, calphas)
     end = time.time()
     print(end - start, ' Seconds')
 
     print('Plotting')
     fig, ax = plt.subplots(3, 1, figsize=(18, 10), sharex=True)
-    ax[0].scatter(n_range, scores, marker='D', label=pdb)
-    ax[0].plot(n_range, scores)
-    ax[0].scatter(n_range, scores_mbk, marker='D', label='mbk')
-    ax[0].plot(n_range, scores_mbk)
-    ax[1].plot(n_range, ntypes)
-    ax[1].scatter(n_range, ntypes)
-    ax[1].plot(n_range, ntypes_mbk)
-    ax[1].scatter(n_range, ntypes_mbk)
+    ax[0].scatter(n_range, scores_d, marker='D', label='mbk')
+    ax[0].plot(n_range, scores_d)
+    ax[1].plot(n_range, ntypes_d)
+    ax[1].scatter(n_range, ntypes_d)
     ax[1].set_ylabel('# of unique clusters')
-    ax[2].plot(n_range, var)
-    ax[2].scatter(n_range, var)
-    ax[2].plot(n_range, var_mbk)
-    ax[2].scatter(n_range, var_mbk)
+    ax[2].plot(n_range, var_d)
+    ax[2].scatter(n_range, var_d)
     ax[2].set_ylabel('Variance In Cluster Size')
-    ax[0].axvline(x=n_range[np.argmax(scores)], label='Best Score', color='black')
-    nc = str(n_range[np.argmax(scores)])
+    ax[0].axvline(x=n_range[np.argmax(scores_d)], label='Best Score', color='black')
+    nc = str(n_range[np.argmax(scores_d)])
     maxticks = 100
     step = max(int((cluster_stop - cluster_start)/maxticks),2)
     ax[0].set_xticks(np.arange(cluster_start, cluster_stop, step))
@@ -80,7 +74,7 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
     # plt.savefig('../results/subdivisions/' + pdb + '_' + nc + '_domains.png')
     plt.show()
 
-    return calphas, labels
+    return calphas, labels_d
 
 def embedding(n_evecs, sims):
     print('Performing Spectral Embedding')
@@ -94,77 +88,71 @@ def embedding(n_evecs, sims):
 def kmean_embedding(n_range, maps, calphas):
     print('Clustering Embedded Points')
 
-    from sklearn.cluster import k_means
-    from sklearn.cluster import MiniBatchKMeans, AgglomerativeClustering
+    #from sklearn.cluster import k_means
+    #from sklearn.cluster import MiniBatchKMeans, AgglomerativeClustering
     #from sklearn.metrics import pairwise_distances
     # from sklearn_extra.cluster import KMedoids
 
     #from sklearn.metrics import silhouette_score
-    from sklearn.metrics import davies_bouldin_score
+    #from sklearn.metrics import davies_bouldin_score
     from score import median_score, cluster_types
     from score import calcCentroids
 
 
-    labels = []
-    labels_mbk = []
-    scores_km = []
-    scores_mbk = []
-    variances = []
-    variances_mbk = []
-    numtypes = []
-    numtypes_mbk = []
+    labels_d = []
+    scores_d = []
+    variances_d = []
+    numtypes_d = []
     for n in range(len(n_range)):
         n_clusters = n_range[n]
         print('Clusters: ' + str(n_clusters))
         start1 = time.time()
         # mbk = MiniBatchKMeans(n_clusters=n_clusters, batch_size=4096, n_init=10, reassignment_ratio=0.15, max_no_improvement=10).fit(maps[:, :n_clusters])
         # mbk = DBSCAN(n_clusters=n_clusters, eps=0.25).fit(maps[:, :n_clusters])
-        # label_mbk = mbk.labels_
-        # centroids_mbk = mbk.cluster_centers_
-        label_mbk = discretize(maps[:, :n_clusters])
-        labels_mbk.append(label_mbk)
-        cl = np.unique(label_mbk)
+        # label_d = mbk.labels_
+        # centroids_d = mbk.cluster_centers_
+        label_d = discretize(maps[:, :n_clusters])
+        labels_d.append(label_d)
+        cl = np.unique(label_d)
         print(cl.shape)
 
-        centroids_mbk = calcCentroids(maps[:, :n_clusters], label_mbk, n_clusters)
+        centroids_d = calcCentroids(maps[:, :n_clusters], label_d, n_clusters)
         end1 = time.time()
 
-        start2 = time.time()
-        centroids, label, _, n_iter = k_means(maps[:, :n_clusters], n_clusters=n_clusters, n_init=10, tol=1e-8, return_n_iter=True)
-        end2 = time.time()
-        print('mbk improvement:' + str((end1-start1)/(end2-start2)))
+        # start2 = time.time()
+        # centroids, label, _, n_iter = k_means(maps[:, :n_clusters], n_clusters=n_clusters, n_init=10, tol=1e-8, return_n_iter=True)
+        # end2 = time.time()
+        # print('mbk improvement:' + str((end1-start1)/(end2-start2)))
         # print(n_iter)
         # kmed = KMedoids(n_clusters=n_clusters).fit(maps[:, :n_clusters])
         # _, label, _ = spherical_k_means(maps[:, :n_clusters], n_clusters=n_clusters)
 
         print('Scoring')
-        testScore = median_score(maps[:, :n_clusters], centroids)
-        testScore_mbk = median_score(maps[:, :n_clusters], centroids_mbk)
-        scores_km.append(testScore)
-        var, ntypes = cluster_types(label)
-        variances.append(var)
-        numtypes.append(ntypes)
+        # testScore = median_score(maps[:, :n_clusters], centroids)
+        testScore_d = median_score(maps[:, :n_clusters], centroids_d)
+        # scores_km.append(testScore)
+        # var, ntypes = cluster_types(label)
+        # variances.append(var)
+        # numtypes.append(ntypes)
 
-        scores_mbk.append(testScore_mbk)
-        var_mbk, ntypes_mbk = cluster_types(label_mbk)
-        variances_mbk.append(var_mbk)
-        numtypes_mbk.append(ntypes_mbk)
+        scores_d.append(testScore_d)
+        var_d, ntypes_d = cluster_types(label_d)
+        variances_d.append(var_d)
+        numtypes_d.append(ntypes_d)
         print('Memory Usage: ', psutil.virtual_memory().percent)
 
         print('Saving Results')
         nc = str(n_range[n])
-        np.savez('../results/subdivisions/' + pdb + '/' + pdb + '_' + nc + '_results', labels=label, score=testScore, var=var, ntypes=ntypes,n=n)
-        np.savez('../results/subdivisions/' + pdb + '/' + pdb + '_' + nc + '_results_mbk', labels=label_mbk, score=testScore_mbk,
-                 var=var_mbk, ntypes=ntypes_mbk, n=n)
-        labels.append(label)
+        np.savez('../results/subdivisions/' + pdb + '/' + pdb + '_' + nc + '_results_d', labels=label_d, score=testScore_d,
+                 var=var_d, ntypes=ntypes_d, n=n)
 
-    best = np.argpartition(scores_km, -5)[-5:]  # indices of 4 best scores
-    for ind in best:
-        writePDB('../results/subdivisions/' + pdb + '/' + pdb + '_' + str(n_range[ind]) + '_domains.pdb', calphas,
-                 beta=labels[ind],
-                 hybrid36=True)
+    # best = np.argpartition(scores_km, -5)[-5:]  # indices of 4 best scores
+    # for ind in best:
+    #     writePDB('../results/subdivisions/' + pdb + '/' + pdb + '_' + str(n_range[ind]) + '_domains.pdb', calphas,
+    #              beta=labels[ind],
+    #              hybrid36=True)
 
-    return labels, scores_km, variances, numtypes, labels_mbk, scores_mbk, variances_mbk, numtypes_mbk
+    return labels_d, scores_d, variances_d, numtypes_d
 
 
 def discretize(
