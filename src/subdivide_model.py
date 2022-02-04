@@ -33,6 +33,9 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
     from input import prebuilt_embedding
     if prebuilt_embedding and os.path.exists('../results/models/' + pdb + 'embedding.npy'):
         maps = np.load('../results/models/' + pdb + 'embedding.npy')
+        if maps.shape[1] < cluster_stop:
+            print('Insufficient Eigenvectors For # Of Clusters')
+            quit()
     else:
         if prebuilt_embedding:
             print('No saved embedding found, rebuilding')
@@ -73,7 +76,7 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
     fig.tight_layout()
     print(pdb + '_' + nc + '_domains.png')
     fig.tight_layout()
-    # plt.savefig('../results/subdivisions/' + pdb + '_' + nc + '_domains.png')
+    plt.savefig('../results/subdivisions/' + pdb + '_' + nc + '_domains.png')
     plt.show()
 
     return calphas, labels_d
@@ -99,14 +102,22 @@ def cluster_embedding(n_range, maps, calphas, method):
     from sklearn.metrics import davies_bouldin_score
     from score import median_score, cluster_types
     from score import calcCentroids
+    from sklearn.preprocessing import normalize
+
+    randmaps = np.random.randn(maps.shape[0]*2, maps.shape[1])
 
 
     labels_d = []
     scores_d = []
     variances_d = []
     numtypes_d = []
+    print('mapshape', maps.shape)
     for n in range(len(n_range)):
         n_clusters = n_range[n]
+        emb = maps[:, :n_clusters]
+        normalize(emb, copy=False)
+        embrand = randmaps[:, :n_clusters]
+        normalize(embrand,copy=False)
         print('Clusters: ' + str(n_clusters))
         start1 = time.time()
         # mbk = MiniBatchKMeans(n_clusters=n_clusters, batch_size=4096, n_init=10, reassignment_ratio=0.15, max_no_improvement=10).fit(maps[:, :n_clusters])
@@ -114,15 +125,24 @@ def cluster_embedding(n_range, maps, calphas, method):
         # label_d = mbk.labels_
         # centroids_d = mbk.cluster_centers_
         print(method)
+        print('emshape', emb.shape)
         if method == 'discretize':
-            label_d = discretize(maps[:, :n_clusters])
-            centroids_d = calcCentroids(maps[:, :n_clusters], label_d, n_clusters)
+            label_d = discretize(emb)
+            print('labelshape',label_d.shape)
+            centroids_d = calcCentroids(emb, label_d, n_clusters)
+            # print('centroids', centroids_d.shape)
         elif method == 'kmeans':
-            centroids_d, label_d, _, n_iter = k_means(maps[:, :n_clusters], n_clusters=n_clusters, n_init=10, tol=1e-8,
+            centroids_d, label_d, _, n_iter = k_means(emb, n_clusters=n_clusters, n_init=10, tol=1e-8,
                                                   return_n_iter=True)
+        elif method == 'both':
+            label_d = discretize(emb)
+            centroids_d = calcCentroids(emb, label_d, n_clusters)
+            centroids_d, label_d, _, n_iter = k_means(emb, n_clusters=n_clusters, init=centroids_d,
+                                                      return_n_iter=True)
         else:
             print('method should be kmeans or discretize. Defaulting to kmeans')
 
+        # normalize(centroids_d)
         labels_d.append(label_d)
         cl = np.unique(label_d)
         print(cl.shape)
@@ -138,7 +158,8 @@ def cluster_embedding(n_range, maps, calphas, method):
 
         print('Scoring')
         # testScore = median_score(maps[:, :n_clusters], centroids)
-        testScore_d = median_score(maps[:, :n_clusters], centroids_d)
+        testScore_rand = median_score(embrand, centroids_d)
+        testScore_d = median_score(emb, centroids_d)/testScore_rand
         # testScore_d = davies_bouldin_score(maps[:, :n_clusters], label_d)
         # scores_km.append(testScore)
         # var, ntypes = cluster_types(label)
@@ -156,11 +177,11 @@ def cluster_embedding(n_range, maps, calphas, method):
         np.savez('../results/subdivisions/' + pdb + '/' + pdb + '_' + nc + '_results_d', labels=label_d, score=testScore_d,
                  var=var_d, ntypes=ntypes_d, n=n)
 
-    # best = np.argpartition(scores_km, -5)[-5:]  # indices of 4 best scores
-    # for ind in best:
-    #     writePDB('../results/subdivisions/' + pdb + '/' + pdb + '_' + str(n_range[ind]) + '_domains.pdb', calphas,
-    #              beta=labels[ind],
-    #              hybrid36=True)
+    best = np.argpartition(scores_d, -5)[-5:]  # indices of 4 best scores
+    for ind in best:
+        writePDB('../results/subdivisions/' + pdb + '/' + pdb + '_' + str(n_range[ind]) + '_domains.pdb', calphas,
+                 beta=labels_d[ind],
+                 hybrid36=True)
 
     return labels_d, scores_d, variances_d, numtypes_d
 
@@ -245,7 +266,7 @@ def discretize(
         # Initialize first column of rotation matrix with a row of the
         # eigenvectors
         rotation = np.zeros((n_components, n_components))
-        rotation[:, 0] = vectors[random_state.randint(1, n_samples), :].T
+        rotation[:, 0] = vectors[random_state.randint(n_samples), :].T
 
         # To initialize the rest of the rotation matrix, find the rows
         # of the eigenvectors that are as orthogonal to each other as
