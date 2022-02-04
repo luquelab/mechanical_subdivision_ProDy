@@ -13,7 +13,7 @@ pdb = '3J4U'
 nc = 210
 cm = plt.get_cmap("viridis")
 
-results = np.load('./' + pdb + '/' + pdb + '_' + str(nc) + '_results_d.npz')
+results = np.load('./' + pdb + '/' + pdb + '_' + str(nc) + '_results.npz')
 labels = results['labels']
 calphas = loadAtoms('../models/' + 'calphas_' + pdb + '.ag.npz')
 coords = calphas.getCoords()

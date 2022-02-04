@@ -50,23 +50,23 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
 
     start = time.time()
     from input import cluster_method as method
-    labels_d, scores_d, var_d, ntypes_d = cluster_embedding(n_range, maps, calphas, method)
+    labels, scores, var, ntypes = cluster_embedding(n_range, maps, calphas, method)
     end = time.time()
     print(end - start, ' Seconds')
 
     print('Plotting')
     fig, ax = plt.subplots(3, 1, figsize=(18, 10), sharex=True)
     fig.suptitle(pdb)
-    ax[0].scatter(n_range, scores_d, marker='D', label='mbk')
-    ax[0].plot(n_range, scores_d)
-    ax[1].plot(n_range, ntypes_d)
-    ax[1].scatter(n_range, ntypes_d)
+    ax[0].scatter(n_range, scores, marker='D', label='mbk')
+    ax[0].plot(n_range, scores)
+    ax[1].plot(n_range, ntypes)
+    ax[1].scatter(n_range, ntypes)
     ax[1].set_ylabel('# of unique clusters')
-    ax[2].plot(n_range, var_d)
-    ax[2].scatter(n_range, var_d)
+    ax[2].plot(n_range, var)
+    ax[2].scatter(n_range, var)
     ax[2].set_ylabel('Variance In Cluster Size')
-    ax[0].axvline(x=n_range[np.argmax(scores_d)], label='Best Score', color='black')
-    nc = str(n_range[np.argmax(scores_d)])
+    ax[0].axvline(x=n_range[np.argmax(scores)], label='Best Score', color='black')
+    nc = str(n_range[np.argmax(scores)])
     maxticks = 100
     step = max(int((cluster_stop - cluster_start)/maxticks),2)
     ax[0].set_xticks(np.arange(cluster_start, cluster_stop, step))
@@ -79,7 +79,7 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
     plt.savefig('../results/subdivisions/' + pdb + '_' + nc + '_domains.png')
     plt.show()
 
-    return calphas, labels_d
+    return calphas, labels
 
 def embedding(n_evecs, sims):
     print('Performing Spectral Embedding')
@@ -107,10 +107,10 @@ def cluster_embedding(n_range, maps, calphas, method):
     randmaps = np.random.randn(maps.shape[0]*2, maps.shape[1])
 
 
-    labels_d = []
-    scores_d = []
-    variances_d = []
-    numtypes_d = []
+    labels = []
+    scores = []
+    variances = []
+    numtypes = []
     print('mapshape', maps.shape)
     for n in range(len(n_range)):
         n_clusters = n_range[n]
@@ -122,29 +122,29 @@ def cluster_embedding(n_range, maps, calphas, method):
         start1 = time.time()
         # mbk = MiniBatchKMeans(n_clusters=n_clusters, batch_size=4096, n_init=10, reassignment_ratio=0.15, max_no_improvement=10).fit(maps[:, :n_clusters])
         # mbk = DBSCAN(n_clusters=n_clusters, eps=0.25).fit(maps[:, :n_clusters])
-        # label_d = mbk.labels_
-        # centroids_d = mbk.cluster_centers_
+        # label = mbk.labels_
+        # centroids = mbk.cluster_centers_
         print(method)
         print('emshape', emb.shape)
         if method == 'discretize':
-            label_d = discretize(emb)
-            print('labelshape',label_d.shape)
-            centroids_d = calcCentroids(emb, label_d, n_clusters)
-            # print('centroids', centroids_d.shape)
+            label = discretize(emb)
+            print('labelshape',label.shape)
+            centroids = calcCentroids(emb, label, n_clusters)
+            # print('centroids', centroids.shape)
         elif method == 'kmeans':
-            centroids_d, label_d, _, n_iter = k_means(emb, n_clusters=n_clusters, n_init=10, tol=1e-8,
+            centroids, label, _, n_iter = k_means(emb, n_clusters=n_clusters, n_init=10, tol=1e-8,
                                                   return_n_iter=True)
         elif method == 'both':
-            label_d = discretize(emb)
-            centroids_d = calcCentroids(emb, label_d, n_clusters)
-            centroids_d, label_d, _, n_iter = k_means(emb, n_clusters=n_clusters, init=centroids_d,
+            label = discretize(emb)
+            centroids = calcCentroids(emb, label, n_clusters)
+            centroids, label, _, n_iter = k_means(emb, n_clusters=n_clusters, init=centroids,
                                                       return_n_iter=True)
         else:
             print('method should be kmeans or discretize. Defaulting to kmeans')
 
-        # normalize(centroids_d)
-        labels_d.append(label_d)
-        cl = np.unique(label_d)
+        # normalize(centroids)
+        labels.append(label)
+        cl = np.unique(label)
         print(cl.shape)
         end1 = time.time()
 
@@ -158,32 +158,32 @@ def cluster_embedding(n_range, maps, calphas, method):
 
         print('Scoring')
         # testScore = median_score(maps[:, :n_clusters], centroids)
-        testScore_rand = median_score(embrand, centroids_d)
-        testScore_d = median_score(emb, centroids_d)/testScore_rand
-        # testScore_d = davies_bouldin_score(maps[:, :n_clusters], label_d)
+        testScore_rand = median_score(embrand, centroids)
+        testScore = median_score(emb, centroids)/testScore_rand
+        # testScore = davies_bouldin_score(maps[:, :n_clusters], label)
         # scores_km.append(testScore)
         # var, ntypes = cluster_types(label)
         # variances.append(var)
         # numtypes.append(ntypes)
 
-        scores_d.append(testScore_d)
-        var_d, ntypes_d = cluster_types(label_d)
-        variances_d.append(var_d)
-        numtypes_d.append(ntypes_d)
+        scores.append(testScore)
+        var, ntypes = cluster_types(label)
+        variances.append(var)
+        numtypes.append(ntypes)
         print('Memory Usage: ', psutil.virtual_memory().percent)
 
         print('Saving Results')
         nc = str(n_range[n])
-        np.savez('../results/subdivisions/' + pdb + '/' + pdb + '_' + nc + '_results_d', labels=label_d, score=testScore_d,
-                 var=var_d, ntypes=ntypes_d, n=n)
+        np.savez('../results/subdivisions/' + pdb + '/' + pdb + '_' + nc + '_results', labels=label, score=testScore,
+                 var=var, ntypes=ntypes, n=n)
 
-    best = np.argpartition(scores_d, -5)[-5:]  # indices of 4 best scores
+    best = np.argpartition(scores, -5)[-5:]  # indices of 4 best scores
     for ind in best:
         writePDB('../results/subdivisions/' + pdb + '/' + pdb + '_' + str(n_range[ind]) + '_domains.pdb', calphas,
-                 beta=labels_d[ind],
+                 beta=labels[ind],
                  hybrid36=True)
 
-    return labels_d, scores_d, variances_d, numtypes_d
+    return labels, scores, variances, numtypes
 
 
 def discretize(
