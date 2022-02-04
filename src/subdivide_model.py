@@ -99,7 +99,7 @@ def cluster_embedding(n_range, maps, calphas, method):
     # from sklearn_extra.cluster import KMedoids
 
     #from sklearn.metrics import silhouette_score
-    from sklearn.metrics import davies_bouldin_score
+    #from sklearn.metrics import davies_bouldin_score
     from score import median_score, cluster_types
     from score import calcCentroids
     from sklearn.preprocessing import normalize
@@ -175,7 +175,7 @@ def cluster_embedding(n_range, maps, calphas, method):
         print('Saving Results')
         nc = str(n_range[n])
         np.savez('../results/subdivisions/' + pdb + '/' + pdb + '_' + nc + '_results', labels=label, score=testScore,
-                 var=var, ntypes=ntypes, n=n)
+                 var=var, ntypes=ntypes, n=n, method=cluster_method)
 
     best = np.argpartition(scores, -5)[-5:]  # indices of 4 best scores
     for ind in best:
