@@ -32,7 +32,7 @@ def cluster_types(labels):
     ntypes = np.unique(counts).shape[0]
     return var, ntypes
 
-def plotScores(pdb, n_range):
+def plotScores(pdb, n_range, save=False):
     import matplotlib.pyplot as plt
     import numpy as np
     scores = []
@@ -68,4 +68,6 @@ def plotScores(pdb, n_range):
     ax[0].legend()
     fig.tight_layout()
     print(pdb + '_' + nc + '_domains.png')
+    if save:
+        plt.savefig('../results/subdivisions/' + pdb + '_' + nc + '_domains.png')
     plt.show()
