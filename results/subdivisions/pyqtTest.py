@@ -120,13 +120,14 @@ w.addItem(g)
 
 from prody import *
 import numpy as np
-pdb = '6nj8'
-nc = 42
+pdb = '6b0x'
+nc = 210
 
-results = np.load('./' + pdb + '/' + pdb + '_' + str(nc) + '_results_d.npz')
+results = np.load('./' + pdb + '/' + pdb + '_' + str(nc) + '_results.npz')
 labels = results['labels']
 calphas = loadAtoms('../models/' + 'calphas_' + pdb + '.ag.npz')
 pos = calphas.getCoords()
+print(pos)
 
 sp2 = gl.GLScatterPlotItem(pos=pos)
 w.addItem(sp2)
@@ -138,10 +139,11 @@ from cmaps import generate_colormap
 cmap = generate_colormap(int(np.max(labels)))
 #cmap = plt.get_cmap('Accent')
 rgba = cmap(norm(labels))
+rgba[:,3] = np.ones_like(labels)*0.9
 print(rgba[:,3])
 size = np.ones_like(labels)*20
 sp2.setData(color=rgba, size=size)
-sp2.setGLOptions('translucent')
+sp2.setGLOptions('opaque')
 
 # def update():
 #     ## update volume colors

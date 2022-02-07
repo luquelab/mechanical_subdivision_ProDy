@@ -137,7 +137,7 @@ def cluster_embedding(n_range, maps, calphas, method):
         elif method == 'both':
             label = discretize(emb)
             centroids = calcCentroids(emb, label, n_clusters)
-            centroids, label, _, n_iter = k_means(emb, n_clusters=n_clusters, init=centroids,
+            centroids, label, _, n_iter = k_means(emb, n_clusters=n_clusters, init=discreteInit,
                                                       return_n_iter=True)
         else:
             print('method should be kmeans or discretize. Defaulting to kmeans')
@@ -185,9 +185,14 @@ def cluster_embedding(n_range, maps, calphas, method):
 
     return labels, scores, variances, numtypes
 
+def discreteInit(vectors, n_clusters, *, copy=False, max_svd_restarts=30, n_iter_max=20, random_state=None):
+    from score import calcCentroids
+    label = discretize(vectors)
+    centroids = calcCentroids(vectors, label, n_clusters)
+    return centroids
 
 def discretize(
-    vectors, *, copy=False, max_svd_restarts=30, n_iter_max=20, random_state=None
+    vectors, n_clusters=10, *, copy=False, max_svd_restarts=30, n_iter_max=20, random_state=None
 ):
     """Search for a partition matrix which is closest to the eigenvector embedding.
     This implementation was proposed in [1]_.

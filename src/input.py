@@ -1,15 +1,15 @@
-pdb = '3j0b'
-n_modes = 90
+pdb = '4pt2'
+n_modes = 70
 
-rebuild_model = False
-rebuild_hessian = True
-rebuild_modes = True
+rebuild_model = True
+rebuild_hessian = False
+rebuild_modes = False
 sample = False
 
-prebuilt_embedding = True
+prebuilt_embedding = False
 onlyTs = False
-T = 1
+T = 7
 cluster_method = 'discretize'
-cluster_start = 12
-cluster_stop = 42
+cluster_start = 32
+cluster_stop = 180
 cluster_step = 2
