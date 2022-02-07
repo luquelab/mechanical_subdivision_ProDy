@@ -88,7 +88,7 @@ def make_model(pdb, n_modes):
         print('Direct Calculation Method')
         covariance = sparse.lil_matrix((n_d, n_d))
         df = sparse.lil_matrix((n_d, n_d))
-        covariance = con_c(evals, evecs, covariance, kirch.row, kirch.col)
+        covariance = con_c(evals.copy(), evecs.copy(), covariance, kirch.row, kirch.col)
         covariance = covariance.tocsr()
         d = con_d(covariance, df, kirch.row, kirch.col)
 
