@@ -21,11 +21,12 @@ def make_model(pdb, n_modes):
             with open(filename, 'wb') as f_out:
                 shutil.copyfileobj(f_in, f_out)
 
-    capsid = parsePDB(filename, biomol=True)
-    calphas = capsid.select('ca').copy()
+    capsid = parsePDB(filename, biomol=False)
+    calphas = capsid['A'].select('ca').copy()
     print('Number Of Residues: ', calphas.getCoords().shape[0])
 
     os.chdir('../../src')
+    pdb = pdb + '_prot'
 
     anm = ANM(pdb + '_full')
     if not rebuild_hessian:
@@ -35,7 +36,7 @@ def make_model(pdb, n_modes):
             anm._hessian = sparse.load_npz('../results/models/' + pdb + 'hess.npz')
             kirch = sparse.load_npz('../results/models/' + pdb + 'kirch.npz')
     else:
-        anm.buildHessian(calphas, cutoff=10.0, kdtree=True, sparse=True)
+        anm.buildHessian(calphas, cutoff=7.5, kdtree=True, sparse=True)
         sparse.save_npz('../results/models/' + pdb + 'hess.npz', anm.getHessian())
         sparse.save_npz('../results/models/' + pdb + 'kirch.npz', anm.getKirchhoff())
         kirch = anm.getKirchhoff()
@@ -133,7 +134,7 @@ def con_c(evals, evecs, c, row, col):
 
     for k in range(row.shape[0]):
         i, j = (row[k], col[k])
-        c[i, j] = cov(evals, evecs, i, j)
+        c[i, j] = cov(evals.copy(), evecs.copy(), i, j)
     return c
 
 def con_d(c, d, row, col):

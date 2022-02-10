@@ -12,7 +12,7 @@ from input import *
 
 
 def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
-
+    pdb = pdb + '_prot'
     print('Loading Model')
     sims = sparse.load_npz('../results/models/' + pdb + 'sims.npz')
     calphas = loadAtoms('../results/models/' + 'calphas_' + pdb + '.ag.npz')
@@ -50,7 +50,7 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
 
     start = time.time()
     from input import cluster_method as method
-    labels, scores, var, ntypes = cluster_embedding(n_range, maps, calphas, method)
+    labels, scores, var, ntypes = cluster_embedding(n_range, maps, calphas, method, pdb)
     end = time.time()
     print(end - start, ' Seconds')
 
@@ -76,7 +76,7 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
     fig.tight_layout()
     print(pdb + '_' + nc + '_domains.png')
     fig.tight_layout()
-    plt.savefig('../results/subdivisions/' + pdb + '_' + nc + '_domains.png')
+    # plt.savefig('../results/subdivisions/' + pdb + '_' + nc + '_domains.png')
     plt.show()
 
     return calphas, labels
@@ -90,7 +90,7 @@ def embedding(n_evecs, sims):
     print('Memory Usage: ', psutil.virtual_memory().percent)
     return X_transformed
 
-def cluster_embedding(n_range, maps, calphas, method):
+def cluster_embedding(n_range, maps, calphas, method, pdb):
     print('Clustering Embedded Points')
 
     from sklearn.cluster import k_means
@@ -148,23 +148,11 @@ def cluster_embedding(n_range, maps, calphas, method):
         print(cl.shape)
         end1 = time.time()
 
-        # start2 = time.time()
-        # centroids, label, _, n_iter = k_means(maps[:, :n_clusters], n_clusters=n_clusters, n_init=10, tol=1e-8, return_n_iter=True)
-        # end2 = time.time()
-        # print('mbk improvement:' + str((end1-start1)/(end2-start2)))
-        # print(n_iter)
-        # kmed = KMedoids(n_clusters=n_clusters).fit(maps[:, :n_clusters])
-        # _, label, _ = spherical_k_means(maps[:, :n_clusters], n_clusters=n_clusters)
 
         print('Scoring')
-        # testScore = median_score(maps[:, :n_clusters], centroids)
-        testScore_rand = median_score(embrand, centroids)
-        testScore = median_score(emb, centroids)/testScore_rand
+        # testScore_rand = median_score(embrand, centroids)
+        testScore = median_score(emb, centroids)# /testScore_rand
         # testScore = davies_bouldin_score(maps[:, :n_clusters], label)
-        # scores_km.append(testScore)
-        # var, ntypes = cluster_types(label)
-        # variances.append(var)
-        # numtypes.append(ntypes)
 
         scores.append(testScore)
         var, ntypes = cluster_types(label)
