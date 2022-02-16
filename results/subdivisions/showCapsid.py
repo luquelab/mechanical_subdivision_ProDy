@@ -9,8 +9,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from mpl_toolkits.mplot3d import Axes3D
-pdb = '3J4U'
-nc = 210
+pdb = '5l35'
+nc = 72
 cm = plt.get_cmap("viridis")
 
 results = np.load('./' + pdb + '/' + pdb + '_' + str(nc) + '_results.npz')
