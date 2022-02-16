@@ -18,11 +18,16 @@ def calcCentroids(X, labels, n_clusters):
 
 
 def median_score(coords, centroids):
+    from input import scoreMethod
     from sklearn.metrics import pairwise_distances
     dists = pairwise_distances(coords,centroids)
     d2min = np.partition(dists, kth=2)[:,:2]
-    b = np.median(d2min[:,1])
-    a = np.median(d2min[:,0])
+    if scoreMethod is 'median':
+        b = np.median(d2min[:,1])
+        a = np.median(d2min[:,0])
+    else:
+        b = np.mean(d2min[:, 1])
+        a = np.mean(d2min[:, 0])
     score = b/a
     return score
 
@@ -40,7 +45,7 @@ def plotScores(pdb, n_range, save=False):
     ntypes = []
     for i in range(len(n_range)):
         nc = n_range[i]
-        results = np.load('../results/subdivisions/' + pdb + '/' + pdb + '_' + str(nc) + '_results_d.npz')
+        results = np.load('../results/subdivisions/' + pdb + '/' + pdb + '_' + str(nc) + '_results.npz')
         score = results['score']
         ntype = results['ntypes']
         var = results['var']

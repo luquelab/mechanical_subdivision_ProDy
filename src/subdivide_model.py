@@ -158,8 +158,8 @@ def cluster_embedding(n_range, maps, calphas, method):
 
         print('Scoring')
         # testScore = median_score(maps[:, :n_clusters], centroids)
-        testScore_rand = median_score(embrand, centroids)
-        testScore = median_score(emb, centroids)/testScore_rand
+        # testScore_rand = median_score(embrand, centroids)
+        testScore = median_score(emb, centroids)# /testScore_rand
         # testScore = davies_bouldin_score(maps[:, :n_clusters], label)
         # scores_km.append(testScore)
         # var, ntypes = cluster_types(label)

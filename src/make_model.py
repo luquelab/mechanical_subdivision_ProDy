@@ -63,6 +63,11 @@ def make_model(pdb, n_modes):
         anm._array = evecs
         saveModel(anm, filename='../results/models/' + pdb + 'anm.npz')
 
+    from eigenCount import eigenCutoff
+
+    #n_modes = eigenCutoff(evals, 0.001)
+    #evals = evals[:n_modes]
+
     import matplotlib.pyplot as plt
     print('Plotting')
     fig, ax = plt.subplots(1, 1, figsize=(16, 6))
