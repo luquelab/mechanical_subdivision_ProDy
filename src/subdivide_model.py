@@ -55,25 +55,9 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
     print(end - start, ' Seconds')
 
     print('Plotting')
-    fig, ax = plt.subplots(2, 1, figsize=(18, 10), sharex=True)
-    fig.suptitle(pdb)
-    ax[0].scatter(n_range, scores, marker='D', label='mbk')
-    ax[0].plot(n_range, scores)
-    ax[1].plot(n_range, ntypes)
-    ax[1].scatter(n_range, ntypes)
-    ax[1].set_ylabel('# of unique clusters')
-    ax[0].axvline(x=n_range[np.argmax(scores)], label='Best Score', color='black')
-    nc = str(n_range[np.argmax(scores)])
-    maxticks = 100
-    step = max(int((cluster_stop - cluster_start)/maxticks),2)
-    ax[0].set_xticks(np.arange(cluster_start, cluster_stop, step))
-    ax[0].set_ylabel('Silhouette Score')
-    ax[0].legend()
-    fig.tight_layout()
-    print(pdb + '_' + nc + '_domains.png')
-    fig.tight_layout()
-    plt.savefig('../results/subdivisions/' + pdb + '_' + nc + '_domains.png')
-    plt.show()
+    from score import plotScores
+
+    plotScores(pdb, n_range, save=True)
 
     return calphas, labels
 
