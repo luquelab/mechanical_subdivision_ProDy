@@ -163,30 +163,28 @@ def evPlot(evals, evecs):
     fig.tight_layout()
     plt.show()
 
-def sqfluctPlot(bfactors, sqFlucts):
+def sqfluctPlot(bfactors, evals, evecs):
     import matplotlib.pyplot as plt
+    from optcutoff import fluctFit
     print('Plotting')
-    bfactors = bfactors # * 3/(8 * np.pi**2)
-    # sqFlucts = sqFlucts
-    # sqFlucts = sqFlucts[:,np.newaxis]
-    a, _, _, _ = np.linalg.lstsq(sqFlucts[:,np.newaxis], bfactors, rcond=-1)
-    print(a)
-    sqFlucts = a*sqFlucts
-    stack = np.stack((bfactors,sqFlucts))
-    print(stack.shape)
-    print(np.corrcoef(bfactors,sqFlucts))
+    nModes, coeff, k, sqFlucts = fluctFit(evals, evecs, bfactors)
     fig, ax = plt.subplots(1, 1, figsize=(16, 6))
-    ax.plot(np.arange(bfactors.shape[0])[:n_asym], np.abs(bfactors[:n_asym] - np.mean(bfactors))/np.std(bfactors), label='bfactors')
-    ax.plot(np.arange(sqFlucts.shape[0])[:n_asym], np.abs(sqFlucts[:n_asym] - np.mean(sqFlucts))/np.std(sqFlucts), label='sqFlucts')
+    print(nModes, coeff, k)
+    n_asym = n_atoms
+    ax.plot(np.arange(bfactors.shape[0])[:int(n_asym/7)], bfactors[:int(n_asym/7)], label='bfactors')
+    ax.plot(np.arange(sqFlucts.shape[0])[:int(n_asym/7)], sqFlucts[:int(n_asym/7)], label='sqFlucts')
     ax.legend()
     fig.tight_layout()
     plt.show()
+    return nModes
 
 
 def distanceFlucts(calphas, evals, evecs, kirch, n_modes, fluctmode='direct'):
     print(evecs.shape[0] / n_atoms)
     from scipy import sparse
     from input import model
+    bfactors = calphas.getBetas()
+    n_modes = sqfluctPlot(bfactors,evals,evecs)
     if fluctmode == 'sample':
         from sampling import calcSample
         print('Sampling Method')
@@ -206,9 +204,8 @@ def distanceFlucts(calphas, evals, evecs, kirch, n_modes, fluctmode='direct'):
             covariance = gCon_c(evals[:n_modes].copy(), evecs[:, :n_modes].copy(), covariance, kirch.row, kirch.col)
             covariance = covariance.tocsr()
             print(covariance.min())
-        bfactors = calphas.getBetas()
+
         sqFlucts = covariance.diagonal()
-        sqfluctPlot(bfactors, sqFlucts.copy())
         d = con_d(covariance, df, kirch.row, kirch.col)
         d = d.tocsr()
         d.eliminate_zeros()
