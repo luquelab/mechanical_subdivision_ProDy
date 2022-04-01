@@ -11,18 +11,25 @@ from scipy import sparse
 
 
 def make_model(pdb, n_modes, mode):
-    from input import cutoff, eigmethod
+    from input import cutoff, eigmethod, model
 
     capsid, calphas = getPDB(pdb)
     global anm, n_atoms, n_dim, n_asym
-    anm = ANM(pdb + '_full')
     n_atoms = calphas.getCoords().shape[0]
     n_dim = 3*n_atoms
     n_asym = int(n_atoms/60)
 
+    if model=='gnm':
+        anm = GNM(pdb + '_full')
+    else:
+        anm = ANM(pdb + '_full')
+
     if mode =='full':
-        hess, kirch = buildHess(pdb, calphas, cutoff)
-        evals, evecs = modeCalc(pdb, hess, kirch, n_modes, eigmethod)
+        if model == 'gnm':
+            kirch = buildKirch(pdb, calphas, cutoff)
+        else:
+            hess, kirch = buildHess(pdb, calphas, cutoff)
+        evals, evecs = modeCalc(pdb, kirch, kirch, n_modes, eigmethod)
         evPlot(evals, evecs)
         distFlucts = distanceFlucts(calphas, evals, evecs, kirch, n_modes)
         sims = fluctToSims(distFlucts, pdb)
@@ -99,6 +106,14 @@ def buildHess(pdb, calphas, cutoff=10.0):
 
     return anm.getHessian(), kirch
 
+def buildKirch(pdb, calphas, cutoff=10.0):
+
+    anm.buildKirchhoff(calphas, cutoff=cutoff, kdtree=True, sparse=True)
+    sparse.save_npz('../results/models/' + pdb + 'kirch.npz', anm.getKirchhoff())
+    kirch = anm.getKirchhoff()
+
+    return kirch
+
 
 def loadHess(pdb):
     hess = sparse.load_npz('../results/models/' + pdb + 'hess.npz')
@@ -111,6 +126,7 @@ def modeCalc(pdb, hess, kirch, n_modes, method):
     from input import model
     print('Calculating Normal Modes')
     start = time.time()
+
     if model=='anm':
         evals, evecs = eigsh(hess, k=n_modes, sigma=1e-8, which='LA')
     else:
@@ -128,7 +144,8 @@ def modeCalc(pdb, hess, kirch, n_modes, method):
 
 
 def loadModes(pdb, n_modes):
-    anm = loadModel('../results/models/' + pdb + 'anm.npz')
+    from input import model
+    anm = loadModel('../results/models/' + pdb + model + '.npz')
     print('Slicing Modes up to ' + str(n_modes))
     print()
     evals = anm.getEigvals()[:n_modes].copy()
@@ -167,6 +184,7 @@ def sqfluctPlot(bfactors, sqFlucts):
 
 
 def distanceFlucts(calphas, evals, evecs, kirch, n_modes, fluctmode='direct'):
+    print(evecs.shape[0] / n_atoms)
     from scipy import sparse
     from input import model
     if fluctmode == 'sample':
@@ -187,10 +205,14 @@ def distanceFlucts(calphas, evals, evecs, kirch, n_modes, fluctmode='direct'):
         else:
             covariance = gCon_c(evals[:n_modes].copy(), evecs[:, :n_modes].copy(), covariance, kirch.row, kirch.col)
             covariance = covariance.tocsr()
+            print(covariance.min())
         bfactors = calphas.getBetas()
         sqFlucts = covariance.diagonal()
-        sqfluctPlot(bfactors, sqFlucts)
+        sqfluctPlot(bfactors, sqFlucts.copy())
         d = con_d(covariance, df, kirch.row, kirch.col)
+        d = d.tocsr()
+        d.eliminate_zeros()
+        print(d.min())
     print('Average Fluctuations Between Elements', d.data.mean())
     fluctPlot(d)
     return d
@@ -247,7 +269,7 @@ def gCov(evals, evecs, i, j):
         cov += 1 / l * (evecs[i, n] * evecs[j, n])
     return cov
 
-
+#@nb.njit()
 def gCon_c(evals, evecs, c, row, col):
     for k in range(row.shape[0]):
         i, j = (row[k], col[k])
@@ -266,8 +288,9 @@ def con_c(evals, evecs, c, row, col):
         c[i, j] = cov(evals, evecs, i, j)
     return c
 
+#@nb.njit()
 def con_d(c, d, row, col):
     for k in range(row.shape[0]):
         i, j = (row[k], col[k])
-        d[i, j] = c[i,i] + c[j,j] - 2 * c[i, j]
+        d[i, j] = np.abs(c[i,i] + c[j,j] - 2 * c[i, j])
     return d
