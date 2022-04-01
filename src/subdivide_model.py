@@ -12,9 +12,12 @@ from input import *
 
 
 def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
-
+    from input import mode
     print('Loading Model')
-    sims = sparse.load_npz('../results/models/' + pdb + 'sims.npz')
+    if mode=='kcluster':
+        sims = -1*sparse.load_npz('../results/models/' + pdb + 'kirch.npz')
+    else:
+        sims = sparse.load_npz('../results/models/' + pdb + 'sims.npz')
     calphas = loadAtoms('../results/models/' + 'calphas_' + pdb + '.ag.npz')
 
 
@@ -62,12 +65,15 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
     return calphas, labels
 
 def embedding(n_evecs, sims):
+    from spectralStuff import spectral_embedding
+    from make_model import evPlot
     print('Performing Spectral Embedding')
-    from sklearn.manifold import spectral_embedding
     from scipy.sparse.csgraph import connected_components
     print(connected_components(sims))
-    X_transformed = spectral_embedding(sims, n_components=n_evecs, drop_first=False)
+    X_transformed, evals = spectral_embedding(sims, n_components=n_evecs, drop_first=False, eigen_solver = 'lobpcg', norm_laplacian=False)
     print('Memory Usage: ', psutil.virtual_memory().percent)
+    evPlot(np.ediff1d(evals), X_transformed)
+    evPlot(evals, X_transformed)
     return X_transformed
 
 def cluster_embedding(n_range, maps, calphas, method):
@@ -78,13 +84,13 @@ def cluster_embedding(n_range, maps, calphas, method):
     #from sklearn.metrics import pairwise_distances
     # from sklearn_extra.cluster import KMedoids
 
-    #from sklearn.metrics import silhouette_score
-    #from sklearn.metrics import davies_bouldin_score
+    from sklearn.metrics import silhouette_score
+    from sklearn.metrics import davies_bouldin_score
     from score import median_score, cluster_types
     from score import calcCentroids
     from sklearn.preprocessing import normalize
 
-    randmaps = np.random.randn(maps.shape[0]*2, maps.shape[1])
+    randmaps = np.random.randn(maps.shape[0]*100, maps.shape[1])
 
 
     labels = []
@@ -137,9 +143,9 @@ def cluster_embedding(n_range, maps, calphas, method):
         # _, label, _ = spherical_k_means(maps[:, :n_clusters], n_clusters=n_clusters)
 
         print('Scoring')
-        # testScore = median_score(maps[:, :n_clusters], centroids)
-        # testScore_rand = median_score(embrand, centroids)
-        testScore = median_score(emb, centroids) # /testScore_rand
+        testScore = median_score(maps[:, :n_clusters], centroids)
+        #testScore_rand = davies_bouldin_score(embrand, labels)
+        #testScore = silhouette_score(emb, label, jobs=-1)#/testScore_rand
         # testScore = davies_bouldin_score(maps[:, :n_clusters], label)
         # scores_km.append(testScore)
         # var, ntypes = cluster_types(label)
@@ -172,7 +178,7 @@ def discreteInit(vectors, n_clusters, *, copy=False, max_svd_restarts=30, n_iter
     return centroids
 
 def discretize(
-    vectors, n_clusters=10, *, copy=False, max_svd_restarts=30, n_iter_max=20, random_state=None
+    vectors, n_clusters=10, *, copy=False, max_svd_restarts=300, n_iter_max=2000, random_state=None
 ):
     """Search for a partition matrix which is closest to the eigenvector embedding.
     This implementation was proposed in [1]_.

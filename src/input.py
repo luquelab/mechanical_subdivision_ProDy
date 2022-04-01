@@ -1,15 +1,20 @@
 pdb = '4pt2'
-n_modes = 70
+n_modes = 200
+model = 'gnm'
+cutoff = 7.5
+eigmethod = 'eigsh'
 
-rebuild_model = True
-rebuild_hessian = False
-rebuild_modes = False
-sample = False
+mode = 'full'
 
 prebuilt_embedding = False
 onlyTs = False
 T = 7
 cluster_method = 'discretize'
-cluster_start = 32
-cluster_stop = 180
+scoreMethod = 'median'
+cluster_start = 12
+cluster_stop = 50
 cluster_step = 2
+
+# P22
+# SF6 5l35
+# CUS-3
