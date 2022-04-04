@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import pairwise_distances
 
@@ -7,22 +8,38 @@ def calcCentroids(X, labels, n_clusters):
         mask = (labels==i)
         if not np.any(mask):
             print('Some clusters unassigned')
-            centroids.append((np.random.rand(n_clusters)))
+            return np.array(centroids), True
         else:
             clust = X[mask,:]
             cent = np.mean(clust, axis=0)
             centroids.append(cent)
 
-    return np.array(centroids)
 
 
+    return np.array(centroids), False
+
+
+def discretize_score(coords, labels):
+    for i in range(n_clusters):
+        mask = (labels==i)
+        if not np.any(mask):
+            print('Some clusters unassigned')
+
+        else:
+            clust = X[mask,:]
+            cent = np.mean(clust, axis=0)
+            centroids.append(cent)
 
 def median_score(coords, centroids):
     from input import scoreMethod
     from sklearn.metrics import pairwise_distances
-    dists = pairwise_distances(coords,centroids)
+
+    dists = pairwise_distances(coords,centroids, metric='cosine')
+    cdist = pairwise_distances(centroids, centroids, metric='cosine')
+    normal = cdist.mean()
     d2min = np.partition(dists, kth=2)[:,:2]
-    if scoreMethod is 'median':
+
+    if scoreMethod == 'median':
         b = np.median(d2min[:,1])
         a = np.median(d2min[:,0])
     else:
@@ -32,8 +49,8 @@ def median_score(coords, centroids):
     return score
 
 def cluster_types(labels):
-    thresh = 5
     _, counts = np.unique(labels, return_counts=True)
+    thresh = 0.05*np.mean(counts)
     counts = np.rint(counts/thresh)*thresh
     var = np.std(counts)
     ntypes = np.unique(counts).shape[0]
@@ -88,3 +105,41 @@ def plotScores(pdb, n_range, save=False):
     if save:
         plt.savefig('../results/subdivisions/' + pdb + '_' + nc + '_domains.png')
     plt.show()
+
+
+def globalPressure(coords, hess, gamma):
+    from scipy import sparse
+    from scipy.spatial import ConvexHull
+    # center coords
+
+    print(coords.shape)
+    n_atoms = coords.shape[0]
+    centroid = coords.mean(axis=0)
+    print(centroid.shape)
+    coords += centroid
+    hull = ConvexHull(coords)
+    vol = hull.volume
+    lens = np.linalg.norm(coords, axis=1)
+    # rAvg = np.mean(lens)
+
+    hess = gamma*hess
+    vs = [0]
+    volumes = [vol]
+    for i in range(200):
+        norms = coords * 1/lens[:,np.newaxis]
+        ncoords = ((i-100+1)/50)*norms
+        vec = ncoords.flatten()
+        v = 1/2 * np.dot(vec.T, hess.dot(vec))
+        volcoords = coords + ncoords
+        hull = ConvexHull(volcoords)
+        vol = hull.volume
+        vs.append(v)
+        volumes.append(vol)
+    print(vs)
+    fig, ax = plt.subplots(figsize=(10,10))
+    ax.scatter(volumes, vs, label='volume vs pressure')
+    ax.legend()
+    plt.show()
+
+
+

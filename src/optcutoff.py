@@ -1,5 +1,7 @@
 import numpy as np
+import numba as nb
 
+#@nb.njit()
 def fastFlucts(evals, evecs, n_modes):
     n_atoms = evecs.shape[0]
     flucts = np.zeros(n_atoms)
@@ -8,9 +10,11 @@ def fastFlucts(evals, evecs, n_modes):
 
     return flucts
 
+
+#@nb.njit(nb.float64(nb.float64[:], nb.float64[:,:]))
 def springFit(bfactors, sqFlucts):
-    a = np.linalg.lstsq(sqFlucts[:, np.newaxis], bfactors, rcond=None)[0]
-    return a, a*sqFlucts
+    a, _, _, _ = np.linalg.lstsq(sqFlucts, bfactors)
+    return a[0]
 
 def fluctFit(evals, evecs, bfactors):
     coeffs = []
@@ -33,9 +37,14 @@ def fluctFit(evals, evecs, bfactors):
 
 
 
-
+# @nb.njit()
 def costFunc(evals, evecs, bfactors, n_modes):
     sqFlucts = fastFlucts(evals,evecs,n_modes)
-    k, scaledFlucts = springFit(bfactors, sqFlucts)
+    if sqFlucts.shape[0] != bfactors.shape[0]:
+        print('anm')
+        sqFlucts = np.reshape(sqFlucts, (-1, 3)).sum(axis=-1)
+
+    k = springFit(bfactors, sqFlucts[:,np.newaxis])
+    scaledFlucts = k*sqFlucts
     c = np.corrcoef(bfactors,scaledFlucts)[1,0]
     return c, k, scaledFlucts

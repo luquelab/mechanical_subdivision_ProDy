@@ -14,6 +14,7 @@ def make_model(pdb, n_modes, mode):
     from input import cutoff, eigmethod, model
 
     capsid, calphas = getPDB(pdb)
+    coords = calphas.getCoords()
     global anm, n_atoms, n_dim, n_asym
     n_atoms = calphas.getCoords().shape[0]
     n_dim = 3*n_atoms
@@ -27,46 +28,28 @@ def make_model(pdb, n_modes, mode):
     if mode =='full':
         if model == 'gnm':
             kirch = buildKirch(pdb, calphas, cutoff)
+            hess = kirch
         else:
             hess, kirch = buildHess(pdb, calphas, cutoff)
-        evals, evecs = modeCalc(pdb, kirch, kirch, n_modes, eigmethod)
-        evPlot(evals, evecs)
-        distFlucts = distanceFlucts(calphas, evals, evecs, kirch, n_modes)
-        sims = fluctToSims(distFlucts, pdb)
-        saveAtoms(calphas, filename='../results/models/' + 'calphas_' + pdb)
-
-    elif mode == 'hess':
-        if not os.path.exists('../results/models/' + pdb + 'hess.npz') or not os.path.exists('../results/models/' + pdb + 'kirch.npz'):
-            print('No hessian found. Building Hessian.')
-            hess, kirch = buildHess(pdb, calphas, cutoff)
+    else:
+        if model == 'gnm':
+            kirch = loadKirch(pdb)
+            hess = kirch
         else:
             hess, kirch = loadHess(pdb)
-        evals, evecs = modeCalc(pdb, hess, kirch, n_modes, eigmethod)
-        evPlot(evals, evecs)
-        distFlucts = distanceFlucts(calphas, evals, evecs, kirch, n_modes)
-        sims = fluctToSims(distFlucts, pdb)
-        saveAtoms(calphas, filename='../results/models/' + 'calphas_' + pdb)
-    elif mode == 'eigs':
 
-        if not os.path.exists('../results/models/' + pdb + 'modes.npz'):
-            print('No evecs found. Calculating')
-            hess, kirch = buildHess(pdb, calphas, cutoff)
-            evals, evecs = modeCalc(pdb, hess, kirch, n_modes, eigmethod)
-        else:
-            evals, evecs, kirch = loadModes(pdb, n_modes)
 
-        evPlot(evals, evecs)
-        distFlucts = distanceFlucts(calphas, evals, evecs, kirch, n_modes)
-        sims = fluctToSims(distFlucts, pdb)
-        saveAtoms(calphas, filename='../results/models/' + 'calphas_' + pdb)
+
+    if mode == 'eigs':
+        evals, evecs, kirch = loadModes(pdb, n_modes)
     else:
-        print('Not a valid mode, defaulting to full')
-        hess, kirch = buildHess(pdb, calphas, cutoff)
         evals, evecs = modeCalc(pdb, hess, kirch, n_modes, eigmethod)
-        evPlot(evals, evecs)
-        distFlucts = distanceFlucts(calphas, evals, evecs, kirch, n_modes)
-        sims = fluctToSims(distFlucts, pdb)
-        saveAtoms(calphas, filename='../results/models/' + 'calphas_' + pdb)
+
+
+    evPlot(evals, evecs)
+    distFlucts = distanceFlucts(calphas, evals, evecs, kirch, n_modes, coords, hess)
+    sims = fluctToSims(distFlucts, pdb)
+    saveAtoms(calphas, filename='../results/models/' + 'calphas_' + pdb)
 
 
     #from eigenCount import eigenCutoff
@@ -121,6 +104,10 @@ def loadHess(pdb):
     kirch = sparse.load_npz('../results/models/' + pdb + 'kirch.npz')
     return hess, kirch
 
+def loadKirch(pdb):
+    kirch = sparse.load_npz('../results/models/' + pdb + 'kirch.npz')
+    return kirch
+
 
 def modeCalc(pdb, hess, kirch, n_modes, method):
     from input import model
@@ -158,8 +145,10 @@ def loadModes(pdb, n_modes):
 def evPlot(evals, evecs):
     import matplotlib.pyplot as plt
     print('Plotting')
-    fig, ax = plt.subplots(1, 1, figsize=(16, 6))
-    ax.scatter(np.arange(evals.shape[0]), evals, marker='D', label='eigs')
+    fig, ax = plt.subplots(2, 1, figsize=(16, 12))
+    ax[0].scatter(np.arange(evals.shape[0]), evals, marker='D', label='eigs')
+    ax[1].plot(np.arange(evecs.shape[1]), evecs[0,:], label='1st Mode')
+    ax[1].plot(np.arange(evecs.shape[1]), evecs[6, :], label='60th Mode')
     fig.tight_layout()
     plt.show()
 
@@ -169,48 +158,42 @@ def sqfluctPlot(bfactors, evals, evecs):
     print('Plotting')
     nModes, coeff, k, sqFlucts = fluctFit(evals, evecs, bfactors)
     fig, ax = plt.subplots(1, 1, figsize=(16, 6))
+    gamma = (8 *np.pi**2)/k
     print(nModes, coeff, k)
-    n_asym = n_atoms
-    ax.plot(np.arange(bfactors.shape[0])[:int(n_asym/7)], bfactors[:int(n_asym/7)], label='bfactors')
-    ax.plot(np.arange(sqFlucts.shape[0])[:int(n_asym/7)], sqFlucts[:int(n_asym/7)], label='sqFlucts')
+    ax.plot(np.arange(bfactors.shape[0])[:int(n_asym)], bfactors[:int(n_asym)], label='bfactors')
+    ax.plot(np.arange(sqFlucts.shape[0])[:int(n_asym)], sqFlucts[:int(n_asym)], label='sqFlucts')
     ax.legend()
     fig.tight_layout()
     plt.show()
-    return nModes
+    return nModes, gamma
 
 
-def distanceFlucts(calphas, evals, evecs, kirch, n_modes, fluctmode='direct'):
+def distanceFlucts(calphas, evals, evecs, kirch, n_modes, coords, hess):
     print(evecs.shape[0] / n_atoms)
     from scipy import sparse
     from input import model
     bfactors = calphas.getBetas()
-    n_modes = sqfluctPlot(bfactors,evals,evecs)
-    if fluctmode == 'sample':
-        from sampling import calcSample
-        print('Sampling Method')
-        coords = calphas.getCoords()
-        d = calcSample(coords, evals, evecs, 50000, kirch.row, kirch.col)
-        n_d = int(evecs.shape[0] / 3)
-        d = sparse.coo_matrix((d, (kirch.row, kirch.col)), shape=(n_d, n_d))
+    n_modes, gamma = sqfluctPlot(bfactors,evals,evecs)
+    from score import globalPressure
+    # globalPressure(coords, hess, gamma)
+    print('Direct Calculation Method')
+    kirch = kirch.tocoo()
+    covariance = sparse.lil_matrix((n_atoms, n_atoms))
+    df = sparse.lil_matrix((n_atoms, n_atoms))
+    if model=='anm':
+        covariance = con_c(evals[:n_modes].copy(), evecs[:, :n_modes].copy(), covariance, kirch.row, kirch.col)
+        covariance = covariance.tocsr()
     else:
-        print('Direct Calculation Method')
-        kirch = kirch.tocoo()
-        covariance = sparse.lil_matrix((n_atoms, n_atoms))
-        df = sparse.lil_matrix((n_atoms, n_atoms))
-        if model=='anm':
-            covariance = con_c(evals[:n_modes].copy(), evecs[:, :n_modes].copy(), covariance, kirch.row, kirch.col)
-            covariance = covariance.tocsr()
-        else:
-            covariance = gCon_c(evals[:n_modes].copy(), evecs[:, :n_modes].copy(), covariance, kirch.row, kirch.col)
-            covariance = covariance.tocsr()
-            print(covariance.min())
+        covariance = gCon_c(evals[:n_modes].copy(), evecs[:, :n_modes].copy(), covariance, kirch.row, kirch.col)
+        covariance = covariance.tocsr()
+        print(covariance.min())
 
         sqFlucts = covariance.diagonal()
         d = con_d(covariance, df, kirch.row, kirch.col)
         d = d.tocsr()
         d.eliminate_zeros()
         print(d.min())
-    print('Average Fluctuations Between Elements', d.data.mean())
+    # print('Average Fluctuations Between Elements', d.data.mean())
     fluctPlot(d)
     return d
 

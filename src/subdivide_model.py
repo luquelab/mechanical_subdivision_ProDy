@@ -100,10 +100,9 @@ def cluster_embedding(n_range, maps, calphas, method):
     print('mapshape', maps.shape)
     for n in range(len(n_range)):
         n_clusters = n_range[n]
-        emb = maps[:, :n_clusters]
+        emb = maps[:, :n_clusters].copy()
         normalize(emb, copy=False)
-        embrand = randmaps[:, :n_clusters]
-        normalize(embrand,copy=False)
+
         print('Clusters: ' + str(n_clusters))
         start1 = time.time()
         # mbk = MiniBatchKMeans(n_clusters=n_clusters, batch_size=4096, n_init=10, reassignment_ratio=0.15, max_no_improvement=10).fit(maps[:, :n_clusters])
@@ -113,21 +112,26 @@ def cluster_embedding(n_range, maps, calphas, method):
         print(method)
         print('emshape', emb.shape)
         if method == 'discretize':
-            label = discretize(emb)
-            print('labelshape',label.shape)
-            centroids = calcCentroids(emb, label, n_clusters)
-            # print('centroids', centroids.shape)
+            loop = True
+            while loop:
+                label = discretize(emb)
+                print('labelshape',label.shape)
+                centroids, loop = calcCentroids(emb, label, n_clusters)
+
+
         elif method == 'kmeans':
             centroids, label, _, n_iter = k_means(emb, n_clusters=n_clusters, n_init=10, tol=1e-8,
                                                   return_n_iter=True)
         elif method == 'both':
             label = discretize(emb)
             centroids = calcCentroids(emb, label, n_clusters)
+            normalize(centroids, copy=False)
             centroids, label, _, n_iter = k_means(emb, n_clusters=n_clusters, init=discreteInit,
                                                       return_n_iter=True)
         else:
             print('method should be kmeans or discretize. Defaulting to kmeans')
 
+        normalize(centroids, copy=False)
         # normalize(centroids)
         labels.append(label)
         cl = np.unique(label)
@@ -143,7 +147,7 @@ def cluster_embedding(n_range, maps, calphas, method):
         # _, label, _ = spherical_k_means(maps[:, :n_clusters], n_clusters=n_clusters)
 
         print('Scoring')
-        testScore = median_score(maps[:, :n_clusters], centroids)
+        testScore = median_score(emb, centroids)
         #testScore_rand = davies_bouldin_score(embrand, labels)
         #testScore = silhouette_score(emb, label, jobs=-1)#/testScore_rand
         # testScore = davies_bouldin_score(maps[:, :n_clusters], label)

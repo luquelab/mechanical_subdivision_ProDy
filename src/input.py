@@ -1,5 +1,5 @@
-pdb = '4pt2'
-n_modes = 1000
+pdb = '2buk'
+n_modes = 300
 model = 'gnm'
 cutoff = 7.5
 eigmethod = 'eigsh'
@@ -12,7 +12,7 @@ T = 7
 cluster_method = 'discretize'
 scoreMethod = 'mean'
 cluster_start = 12
-cluster_stop = 60
+cluster_stop = 62
 cluster_step = 2
 
 # P22
