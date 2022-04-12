@@ -112,11 +112,11 @@ def cluster_embedding(n_range, maps, calphas, method):
         print(method)
         print('emshape', emb.shape)
         if method == 'discretize':
-            loop = True
-            while loop:
-                label = discretize(emb)
-                print('labelshape',label.shape)
-                centroids, loop = calcCentroids(emb, label, n_clusters)
+            # loop = True
+            # while loop:
+            label = discretize(emb)
+            print('labelshape',label.shape)
+            centroids, loop = calcCentroids(emb, label, n_clusters)
 
 
         elif method == 'kmeans':

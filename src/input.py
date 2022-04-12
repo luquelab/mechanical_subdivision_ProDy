@@ -1,18 +1,18 @@
-pdb = '2buk'
-n_modes = 300
+pdb = '6nj8'
+n_modes = 500
 model = 'gnm'
 cutoff = 7.5
 eigmethod = 'eigsh'
 
-mode = 'full'
+mode = 'wha'
 
 prebuilt_embedding = False
 onlyTs = False
 T = 7
 cluster_method = 'discretize'
-scoreMethod = 'mean'
-cluster_start = 12
-cluster_stop = 62
+scoreMethod = 'median'
+cluster_start = 4
+cluster_stop = 242
 cluster_step = 2
 
 # P22

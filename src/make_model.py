@@ -158,6 +158,11 @@ def sqfluctPlot(bfactors, evals, evecs):
     print('Plotting')
     nModes, coeff, k, sqFlucts = fluctFit(evals, evecs, bfactors)
     fig, ax = plt.subplots(1, 1, figsize=(16, 6))
+    kb = 1.38065 * 10**-23
+    T = 293
+    da = 110*1.66*10**-27
+    angs = 10^20
+    scaledKb = T*kb*da*angs
     gamma = (8 *np.pi**2)/k
     print(nModes, coeff, k)
     ax.plot(np.arange(bfactors.shape[0])[:int(n_asym)], bfactors[:int(n_asym)], label='bfactors')
