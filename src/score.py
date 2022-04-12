@@ -106,6 +106,19 @@ def plotScores(pdb, n_range, save=False):
         plt.savefig('../results/subdivisions/' + pdb + '_' + nc + '_domains.png')
     plt.show()
 
+def clustFlucts(labels, pdb):
+    data = np.load('../results/subdivisions/' + pdb + '_sqFlucts.npz')
+    sqFlucts = data['sqFlucts']
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+    n_clusters = np.max(labels)
+    for i in range(2):
+        mask = (labels==i)
+        clustFl = sqFlucts[mask]
+        print(clustFl.shape)
+        ax.plot(np.arange(clustFl.shape[0]), clustFl, label=str(i))
+    plt.show()
+
 
 def globalPressure(coords, hess, gamma):
     from scipy import sparse

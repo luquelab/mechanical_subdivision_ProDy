@@ -14,6 +14,8 @@ def make_model(pdb, n_modes, mode):
     from input import cutoff, eigmethod, model
 
     capsid, calphas = getPDB(pdb)
+    calphas = calphas.select('chain A')
+    print(calphas.numAtoms())
     coords = calphas.getCoords()
     global anm, n_atoms, n_dim, n_asym
     n_atoms = calphas.getCoords().shape[0]
@@ -44,6 +46,12 @@ def make_model(pdb, n_modes, mode):
         evals, evecs, kirch = loadModes(pdb, n_modes)
     else:
         evals, evecs = modeCalc(pdb, hess, kirch, n_modes, eigmethod)
+
+    # anm._n_atoms = n_atoms
+    # anm._vars = 1/evals
+    # print(anm.numAtoms())
+    # print(calphas.numAtoms())
+    # writeNMD('test.nmd', anm[:20], calphas)
 
 
     evPlot(evals, evecs)
@@ -143,6 +151,7 @@ def loadModes(pdb, n_modes):
 
 
 def evPlot(evals, evecs):
+    from prody import writeNMD
     import matplotlib.pyplot as plt
     print('Plotting')
     fig, ax = plt.subplots(2, 1, figsize=(16, 12))
@@ -153,6 +162,7 @@ def evPlot(evals, evecs):
     plt.show()
 
 def sqfluctPlot(bfactors, evals, evecs):
+    from input import pdb
     import matplotlib.pyplot as plt
     from optcutoff import fluctFit
     print('Plotting')
@@ -164,12 +174,15 @@ def sqfluctPlot(bfactors, evals, evecs):
     angs = 10^20
     scaledKb = T*kb*da*angs
     gamma = (8 *np.pi**2)/k
-    print(nModes, coeff, k)
+    print(nModes, coeff, gamma)
+    np.savez('../results/subdivisions/' + pdb + '_sqFlucts.npz', sqFlucts=sqFlucts, k=k, cc=coeff, nModes=nModes)
     ax.plot(np.arange(bfactors.shape[0])[:int(n_asym)], bfactors[:int(n_asym)], label='bfactors')
     ax.plot(np.arange(sqFlucts.shape[0])[:int(n_asym)], sqFlucts[:int(n_asym)], label='sqFlucts')
     ax.legend()
+    fig.suptitle('# Modes: ' + str(nModes) + ' Corr. Coeff: ' + str(coeff) + ' Spring Constant: ' + str(gamma), fontsize=16)
     fig.tight_layout()
     plt.show()
+    plt.savefig('../results/subdivisions/' + pdb + '_sqFlucts.png')
     return nModes, gamma
 
 

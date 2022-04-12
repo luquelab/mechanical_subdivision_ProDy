@@ -57,9 +57,13 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
     end = time.time()
     print(end - start, ' Seconds')
 
+    n_best = np.argmax(scores)
+
     print('Plotting')
     from score import plotScores
 
+    from score import clustFlucts
+    clustFlucts(labels[n_best], pdb)
     plotScores(pdb, n_range, save=True)
 
     return calphas, labels

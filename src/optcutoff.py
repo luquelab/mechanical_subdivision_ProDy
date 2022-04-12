@@ -41,7 +41,6 @@ def fluctFit(evals, evecs, bfactors):
 def costFunc(evals, evecs, bfactors, n_modes):
     sqFlucts = fastFlucts(evals,evecs,n_modes)
     if sqFlucts.shape[0] != bfactors.shape[0]:
-        print('anm')
         sqFlucts = np.reshape(sqFlucts, (-1, 3)).sum(axis=-1)
 
     k = springFit(bfactors, sqFlucts[:,np.newaxis])
