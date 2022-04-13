@@ -8,7 +8,8 @@ def calcCentroids(X, labels, n_clusters):
         mask = (labels==i)
         if not np.any(mask):
             print('Some clusters unassigned')
-            return np.array(centroids), True
+            centroids.append((np.random.rand(n_clusters)))
+            #return np.array(centroids), True
         else:
             clust = X[mask,:]
             cent = np.mean(clust, axis=0)
@@ -63,7 +64,7 @@ def plotScores(pdb, n_range, save=False):
 
     font = {'family': 'normal',
             'weight': 'normal',
-            'size': 16}
+            'size': 24}
 
     matplotlib.rc('font', **font)
 
@@ -154,5 +155,24 @@ def globalPressure(coords, hess, gamma):
     ax.legend()
     plt.show()
 
+# def vStress(i,j, hess, evec):
+#     vec =
+#
+# def virialStress(vec, coords, hess):
 
+def forceVec(evec, hess):
+    forces = hess.dot(evec)
+    forces = np.reshape(forces,(-1,3))
+    magnitudes = np.linalg.norm(forces, axis=1)
+    return forces, magnitudes
 
+def collectivity(sqFlucts):
+    n = sqFlucts.shape[0]
+    alpha = 1/sqFlucts.sum()
+    k = 0
+    for i in range(n):
+        k += alpha*sqFlucts[i] * np.log(alpha * sqFlucts[i])
+    kc = np.exp(-k)
+    kc = kc/n
+    print('Collectivity Of Motion', kc)
+    return k

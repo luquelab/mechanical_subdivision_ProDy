@@ -14,16 +14,17 @@ def make_model(pdb, n_modes, mode):
     from input import cutoff, eigmethod, model
 
     capsid, calphas = getPDB(pdb)
-    calphas = calphas.select('chain A')
     print(calphas.numAtoms())
     coords = calphas.getCoords()
     global anm, n_atoms, n_dim, n_asym
     n_atoms = calphas.getCoords().shape[0]
+    print(n_atoms)
     n_dim = 3*n_atoms
     n_asym = int(n_atoms/60)
 
     if model=='gnm':
         anm = GNM(pdb + '_full')
+        n_dim = n_atoms
     else:
         anm = ANM(pdb + '_full')
 
@@ -118,17 +119,44 @@ def loadKirch(pdb):
 
 
 def modeCalc(pdb, hess, kirch, n_modes, method):
-    from input import model
+    from input import model, eigmethod
     print('Calculating Normal Modes')
     start = time.time()
 
     if model=='anm':
-        evals, evecs = eigsh(hess, k=n_modes, sigma=1e-8, which='LA')
+        mat = hess
     else:
-        evals, evecs = eigsh(kirch, k=n_modes, sigma=1e-8, which='LA')
+        mat = kirch
+    if eigmethod=='eigsh':
+        evals, evecs = eigsh(hess, k=n_modes, sigma=1e-8, which='LA')
+    elif eigmethod=='lobpcg':
+        from pyamg import smoothed_aggregation_solver
+        if not hasattr(np, "float128"):
+            np.float128 = np.longdouble  # #698
+        diag_shift = 1e-5 * sparse.eye(mat.shape[0])
+        mat += diag_shift
+        ml = smoothed_aggregation_solver(hess)
+        M = ml.aspreconditioner()
+
+        hess -= diag_shift
+        epredict = np.random.rand(n_dim, n_modes+6)
+        evals, evecs = lobpcg(hess, epredict, M=M, largest=False, tol=0, maxiter=n)
+        evals = evals[6:]
+        evecs = evecs[:,6:]
+        print(evecs.shape)
+    elif eigmethod=='lobcuda':
+        import cupy as cp
+        from cupyx.scipy.sparse.linalg import lobpcg as clobpcg
+        sparse_gpu = cp.sparse.csr_matrix(hess.astype(cp.float32))
+        epredict = cp.random.rand(n_dim, n_modes+6)
+        evals, evecs = clobpcg(sparse_gpu, epredict, largest=False, tol=0, maxiter=n_dim)
+        evals = cp.asnumpy(evals[6:])
+        evecs = cp.asnumpy(evecs[:, 6:])
+        print(evecs.shape)
     print(evals)
     end = time.time()
     print(end - start)
+    print(evals[:6])
     anm._eigvals = evals
     anm._n_modes = len(evals)
     anm._eigvecs = evecs
@@ -165,6 +193,7 @@ def sqfluctPlot(bfactors, evals, evecs):
     from input import pdb
     import matplotlib.pyplot as plt
     from optcutoff import fluctFit
+    from score import collectivity
     print('Plotting')
     nModes, coeff, k, sqFlucts = fluctFit(evals, evecs, bfactors)
     fig, ax = plt.subplots(1, 1, figsize=(16, 6))
@@ -175,6 +204,7 @@ def sqfluctPlot(bfactors, evals, evecs):
     scaledKb = T*kb*da*angs
     gamma = (8 *np.pi**2)/k
     print(nModes, coeff, gamma)
+    kc = collectivity(sqFlucts)
     np.savez('../results/subdivisions/' + pdb + '_sqFlucts.npz', sqFlucts=sqFlucts, k=k, cc=coeff, nModes=nModes)
     ax.plot(np.arange(bfactors.shape[0])[:int(n_asym)], bfactors[:int(n_asym)], label='bfactors')
     ax.plot(np.arange(sqFlucts.shape[0])[:int(n_asym)], sqFlucts[:int(n_asym)], label='sqFlucts')

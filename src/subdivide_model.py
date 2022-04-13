@@ -119,7 +119,6 @@ def cluster_embedding(n_range, maps, calphas, method):
             # loop = True
             # while loop:
             label = discretize(emb)
-            print('labelshape',label.shape)
             centroids, loop = calcCentroids(emb, label, n_clusters)
 
 
