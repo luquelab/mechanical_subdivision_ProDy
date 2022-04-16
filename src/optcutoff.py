@@ -13,13 +13,29 @@ def fastFlucts(evals, evecs, n_modes):
 
 #@nb.njit(nb.float64(nb.float64[:], nb.float64[:,:]))
 def springFit(bfactors, sqFlucts):
-    a, _, _, _ = np.linalg.lstsq(sqFlucts, bfactors)
-    return a[0]
+    from sklearn.linear_model import HuberRegressor
+    #a, _, _, _ = np.linalg.lstsq(sqFlucts, bfactors)
+    #a = springFit2(bfactors, sqFlucts)
+    huber = HuberRegressor(fit_intercept=False).fit(sqFlucts, bfactors)
+    a = huber.coef_
+    print(a)
+    return a
+
+def springFit2(bfactors, sqFlucts):
+    from scipy.optimize import minimize_scalar
+    res = minimize_scalar(lambda k: l1Cost(bfactors, sqFlucts, k))
+    return res.x
+
+
+@nb.njit()
+def l1Cost(bfactors, sqFlucts, a):
+    return np.sum(np.abs(bfactors - a * sqFlucts))
 
 def fluctFit(evals, evecs, bfactors):
     coeffs = []
     ks = []
     flucts = []
+    minModes = 60
     for n_modes in range(len(evals)):
         if n_modes==0:
             continue

@@ -174,5 +174,21 @@ def collectivity(sqFlucts):
         k += alpha*sqFlucts[i] * np.log(alpha * sqFlucts[i])
     kc = np.exp(-k)
     kc = kc/n
-    print('Collectivity Of Motion', kc)
-    return k
+    # print('Collectivity Of Motion', kc)
+    return kc
+
+def meanCollect(evecs, evals, bfactors):
+    n = evals.shape[0]
+    meank = 0
+    for i in range(n):
+        mode = evecs[:,i]
+        sqFlucts = mode**2
+
+        if sqFlucts.shape[0] != bfactors.shape[0]:
+            sqFlucts = np.reshape(sqFlucts, (-1, 3)).sum(axis=-1)
+
+        kc = collectivity(sqFlucts)
+        meank += 1/evals[i]*kc
+    meank = meank/n
+    print('Mean Collectivity Of Motion', meank)
+    return meank

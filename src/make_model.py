@@ -131,6 +131,7 @@ def modeCalc(pdb, hess, kirch, n_modes, method):
         evals, evecs = eigsh(hess, k=n_modes, sigma=1e-8, which='LA')
     elif eigmethod=='lobpcg':
         from pyamg import smoothed_aggregation_solver
+        from scipy.sparse.linalg import lobpcg
         if not hasattr(np, "float128"):
             np.float128 = np.longdouble  # #698
         diag_shift = 1e-5 * sparse.eye(mat.shape[0])
@@ -140,7 +141,7 @@ def modeCalc(pdb, hess, kirch, n_modes, method):
 
         hess -= diag_shift
         epredict = np.random.rand(n_dim, n_modes+6)
-        evals, evecs = lobpcg(hess, epredict, M=M, largest=False, tol=0, maxiter=n)
+        evals, evecs = lobpcg(hess, epredict, M=M, largest=False, tol=0, maxiter=n_dim)
         evals = evals[6:]
         evecs = evecs[:,6:]
         print(evecs.shape)
@@ -193,7 +194,7 @@ def sqfluctPlot(bfactors, evals, evecs):
     from input import pdb
     import matplotlib.pyplot as plt
     from optcutoff import fluctFit
-    from score import collectivity
+    from score import collectivity, meanCollect
     print('Plotting')
     nModes, coeff, k, sqFlucts = fluctFit(evals, evecs, bfactors)
     fig, ax = plt.subplots(1, 1, figsize=(16, 6))
@@ -205,11 +206,12 @@ def sqfluctPlot(bfactors, evals, evecs):
     gamma = (8 *np.pi**2)/k
     print(nModes, coeff, gamma)
     kc = collectivity(sqFlucts)
+    kcmean = meanCollect(evecs, evals, bfactors)
     np.savez('../results/subdivisions/' + pdb + '_sqFlucts.npz', sqFlucts=sqFlucts, k=k, cc=coeff, nModes=nModes)
     ax.plot(np.arange(bfactors.shape[0])[:int(n_asym)], bfactors[:int(n_asym)], label='bfactors')
     ax.plot(np.arange(sqFlucts.shape[0])[:int(n_asym)], sqFlucts[:int(n_asym)], label='sqFlucts')
     ax.legend()
-    fig.suptitle('# Modes: ' + str(nModes) + ' Corr. Coeff: ' + str(coeff) + ' Spring Constant: ' + str(gamma), fontsize=16)
+    fig.suptitle('# Modes: ' + str(nModes) + ' Corr. Coeff: ' + str(coeff) + ' Spring Constant: ' + str(gamma) + ' Collectivity: ' + str(kcmean), fontsize=16)
     fig.tight_layout()
     plt.show()
     plt.savefig('../results/subdivisions/' + pdb + '_sqFlucts.png')
