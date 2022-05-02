@@ -13,9 +13,9 @@ from scipy import sparse
 def make_model(pdb, n_modes, mode):
     from input import cutoff, eigmethod, model
 
-    capsid, calphas = getPDB(pdb)
-    print(calphas.numAtoms())
+    capsid, calphas, title = getPDB(pdb)
     coords = calphas.getCoords()
+    print(title)
     global anm, n_atoms, n_dim, n_asym
     n_atoms = calphas.getCoords().shape[0]
     print(n_atoms)
@@ -55,8 +55,15 @@ def make_model(pdb, n_modes, mode):
     # writeNMD('test.nmd', anm[:20], calphas)
 
 
+
     evPlot(evals, evecs)
+    # icoEvPlot(evals, evecs, calphas)
+    bfactors = calphas.getBetas()
+    n_modes, gamma = mechanicalProperties(bfactors, evals, evecs, coords, hess)
+
     distFlucts = distanceFlucts(calphas, evals, evecs, kirch, n_modes, coords, hess)
+    from score import stresses
+    rStress = stresses(hess, distFlucts)
     sims = fluctToSims(distFlucts, pdb)
     saveAtoms(calphas, filename='../results/models/' + 'calphas_' + pdb)
 
@@ -79,14 +86,15 @@ def getPDB(pdb):
             with open(filename, 'wb') as f_out:
                 shutil.copyfileobj(f_in, f_out)
 
-    capsid = parsePDB(filename, biomol=True)
+    capsid, header = parsePDB(filename, header=True, biomol=True)
+    title = header['title']
     calphas = capsid.select('calpha').copy()
     print('Number Of Residues: ', calphas.getCoords().shape[0])
     os.chdir('../../src')
 
     writePDB('../results/subdivisions/' + pdb + '_ca.pdb', calphas,
              hybrid36=True)
-    return capsid, calphas
+    return capsid, calphas, title
 
 
 def buildHess(pdb, calphas, cutoff=10.0):
@@ -132,16 +140,16 @@ def modeCalc(pdb, hess, kirch, n_modes, method):
     elif eigmethod=='lobpcg':
         from pyamg import smoothed_aggregation_solver
         from scipy.sparse.linalg import lobpcg
-        if not hasattr(np, "float128"):
-            np.float128 = np.longdouble  # #698
-        diag_shift = 1e-5 * sparse.eye(mat.shape[0])
-        mat += diag_shift
-        ml = smoothed_aggregation_solver(hess)
-        M = ml.aspreconditioner()
-
-        hess -= diag_shift
+        # if not hasattr(np, "float128"):
+        #     np.float128 = np.longdouble  # #698
+        # diag_shift = 1e-5 * sparse.eye(mat.shape[0])
+        # mat += diag_shift
+        # ml = smoothed_aggregation_solver(hess)
+        # M = ml.aspreconditioner()
+        #
+        # hess -= diag_shift
         epredict = np.random.rand(n_dim, n_modes+6)
-        evals, evecs = lobpcg(hess, epredict, M=M, largest=False, tol=0, maxiter=n_dim)
+        evals, evecs = lobpcg(hess, epredict, largest=False, tol=0, maxiter=n_dim)
         evals = evals[6:]
         evecs = evecs[:,6:]
         print(evecs.shape)
@@ -158,22 +166,23 @@ def modeCalc(pdb, hess, kirch, n_modes, method):
     end = time.time()
     print(end - start)
     print(evals[:6])
-    anm._eigvals = evals
-    anm._n_modes = len(evals)
-    anm._eigvecs = evecs
-    anm._array = evecs
-    saveModel(anm, filename='../results/models/' + pdb + 'gnm.npz')
-    np.savez('../results/models/' + pdb + 'modes.npz', evals=evals, evecs=evecs)
+    np.savez('../results/models/' + pdb + model + 'modes.npz', evals=evals, evecs=evecs)
     return evals, evecs
 
 
 def loadModes(pdb, n_modes):
     from input import model
-    anm = loadModel('../results/models/' + pdb + model + '.npz')
+    if model=='anm':
+        modes = np.load('../results/models/' + pdb + 'modes.npz')
+        evals = modes['evals'][:n_modes].copy()
+        evecs = modes['evecs'][:, :n_modes].copy()
+    else:
+        model = loadModel('../results/models/' + pdb + 'gnm.npz')
+        evals = model.getEigvals()[:n_modes].copy()
+        evecs = model.getEigvecs()[:, :n_modes].copy()
     print('Slicing Modes up to ' + str(n_modes))
     print()
-    evals = anm.getEigvals()[:n_modes].copy()
-    evecs = anm.getEigvecs()[:, :n_modes].copy()
+
     print(evecs.shape)
     kirch = sparse.load_npz('../results/models/' + pdb + 'kirch.npz')
     return evals, evecs, kirch
@@ -183,38 +192,78 @@ def evPlot(evals, evecs):
     from prody import writeNMD
     import matplotlib.pyplot as plt
     print('Plotting')
-    fig, ax = plt.subplots(2, 1, figsize=(16, 12))
-    ax[0].scatter(np.arange(evals.shape[0]), evals, marker='D', label='eigs')
-    ax[1].plot(np.arange(evecs.shape[1]), evecs[0,:], label='1st Mode')
-    ax[1].plot(np.arange(evecs.shape[1]), evecs[6, :], label='60th Mode')
+    fig, ax = plt.subplots(1, 1, figsize=(16, 12))
+    ax.scatter(np.arange(evals.shape[0]), evals, marker='D', label='eigs')
+    #ax[1].plot(np.arange(evecs.shape[1]), evecs[0,:], label='1st Mode')
+    #ax[1].plot(np.arange(evecs.shape[1]), evecs[6, :], label='60th Mode')
     fig.tight_layout()
     plt.show()
 
-def sqfluctPlot(bfactors, evals, evecs):
+def icoEvPlot(evals, evecs, calphas):
+    import matplotlib.pyplot as plt
+    uniques, inds, counts = np.unique(evals.round(decimals=6), return_index=True, return_counts=True)
+    icoEvalInds = inds[counts==1]
+    print(icoEvalInds)
+    icoEvals = evals[icoEvalInds]
+    icoEvecs = evecs[:,icoEvalInds]
+    anm._eigvals = evals
+    anm._eigvecs = evecs
+    anm._array = evecs
+    anm._n_modes = evals.shape[0]
+    anm._vars = 1/evals
+    print(icoEvecs.shape)
+    print(icoEvals)
+    anm._n_atoms = calphas.getCoords().shape[0]
+    fig, ax = plt.subplots(1, 1, figsize=(16, 12))
+    ax.scatter(np.arange(icoEvals.shape[0]), icoEvals, marker='D', label='eigs')
+    plt.show()
+    writeNMD('test.nmd', anm[icoEvalInds], calphas)
+
+
+def mechanicalProperties(bfactors, evals, evecs, coords, hess):
     from input import pdb
+    import matplotlib
     import matplotlib.pyplot as plt
     from optcutoff import fluctFit
-    from score import collectivity, meanCollect
+    from score import collectivity, meanCollect, effectiveSpringConstant, overlapStiffness, globalPressure
+
     print('Plotting')
     nModes, coeff, k, sqFlucts = fluctFit(evals, evecs, bfactors)
+
+    #compressibility, stiffneses = effectiveSpringConstant(coords, evals[:nModes], evecs[:,:nModes])
+    from score import globalPressure
+    # bulkmod = globalPressure(coords, hess, 1)
+    # print('Bulk Modulus 1: ', bulkmod)
+    # print('Bulk Modulus 2: ', 1 / compressibility)
+    # plt.rcParams['text.usetex'] = True
     fig, ax = plt.subplots(1, 1, figsize=(16, 6))
-    kb = 1.38065 * 10**-23
-    T = 293
-    da = 110*1.66*10**-27
-    angs = 10^20
-    scaledKb = T*kb*da*angs
+    font = {'family': 'sans-serif',
+            'weight': 'normal',
+            'size': 16}
+    # matplotlib.rc('font', **font)
+    # kb = 1.38065 * 10**-23
+    # T = 293
+    # da = 110*1.66*10**-27
+    # angs = 10^20
+    # scaledKb = T*kb*da*angs
     gamma = (8 *np.pi**2)/k
+
     print(nModes, coeff, gamma)
     kc = collectivity(sqFlucts)
     kcmean = meanCollect(evecs, evals, bfactors)
+    from score import meanStiff
+    mstiff = meanStiff(evals)
     np.savez('../results/subdivisions/' + pdb + '_sqFlucts.npz', sqFlucts=sqFlucts, k=k, cc=coeff, nModes=nModes)
-    ax.plot(np.arange(bfactors.shape[0])[:int(n_asym)], bfactors[:int(n_asym)], label='bfactors')
-    ax.plot(np.arange(sqFlucts.shape[0])[:int(n_asym)], sqFlucts[:int(n_asym)], label='sqFlucts')
+    ax.plot(np.arange(bfactors.shape[0])[:int(n_asym)], bfactors[:int(n_asym)], label='B-factors')
+    ax.plot(np.arange(sqFlucts.shape[0])[:int(n_asym)], sqFlucts[:int(n_asym)], label='Squared Fluctuations')
+    ax.set_ylabel(r'$Å^{2}$')
+    ax.set_xlabel('Residue Number')
     ax.legend()
-    fig.suptitle('# Modes: ' + str(nModes) + ' Corr. Coeff: ' + str(coeff) + ' Spring Constant: ' + str(gamma) + ' Collectivity: ' + str(kcmean), fontsize=16)
+    fig.suptitle('Squared Fluctuations vs B-factors for PDB: ' + pdb  + "\n" + r' $\gamma = $' + str(gamma) + r' $k_{b}T/Å^{2}$',fontsize=16)
+    # fig.suptitle('# Modes: ' + str(nModes) + ' Corr. Coeff: ' + str(coeff) + ' Spring Constant: ' + str(gamma), fontsize=16)
     fig.tight_layout()
-    plt.show()
     plt.savefig('../results/subdivisions/' + pdb + '_sqFlucts.png')
+    plt.show()
     return nModes, gamma
 
 
@@ -222,10 +271,9 @@ def distanceFlucts(calphas, evals, evecs, kirch, n_modes, coords, hess):
     print(evecs.shape[0] / n_atoms)
     from scipy import sparse
     from input import model
+    n_modes = int(n_modes)
+    print(n_modes)
     bfactors = calphas.getBetas()
-    n_modes, gamma = sqfluctPlot(bfactors,evals,evecs)
-    from score import globalPressure
-    # globalPressure(coords, hess, gamma)
     print('Direct Calculation Method')
     kirch = kirch.tocoo()
     covariance = sparse.lil_matrix((n_atoms, n_atoms))
@@ -238,11 +286,11 @@ def distanceFlucts(calphas, evals, evecs, kirch, n_modes, coords, hess):
         covariance = covariance.tocsr()
         print(covariance.min())
 
-        sqFlucts = covariance.diagonal()
-        d = con_d(covariance, df, kirch.row, kirch.col)
-        d = d.tocsr()
-        d.eliminate_zeros()
-        print(d.min())
+    sqFlucts = covariance.diagonal()
+    d = con_d(covariance, df, kirch.row, kirch.col)
+    d = d.tocsr()
+    d.eliminate_zeros()
+    print(d.min())
     # print('Average Fluctuations Between Elements', d.data.mean())
     fluctPlot(d)
     return d
@@ -289,6 +337,40 @@ def cov(evals, evecs, i, j):
     cov = tr1  # / np.sqrt(tr2 * tr3)
     return cov
 
+# def covDiags(evals, evecs):
+#     n_atoms = int(evecs.shape[0]/3)
+#     n_evals = evals.shape[0]
+#     covDiags = np.zeros((n,3,3))
+#     for i in range(n_evals):
+#         ev = evals[i]
+#         for j in range(n_atoms):
+#             vec = evecs[3*j:3*j+3]
+#             block = 1/ev * np.outer(vec,vec)
+#             covDiags[j] += block
+#     return covDiags
+
+def sphericalTransform(block, coord):
+    x = coord[0]
+    y = coord[1]
+    z = coord[2]
+    r = np.sqrt(x**2 + y**2 + z**2)
+    phi = np.arctan2(y,x)
+    theta = np.arccos(z,r)
+    j1 = np.cos(phi) * np.sin(theta)
+    j2 = -r*np.sin(phi) * np.sin(theta)
+    j3 = r*np.cos(phi) * np.cos(theta)
+    j4 = np.sin(phi) * np.sin(theta)
+    j5 = r*np.cos(phi) * np.sin(theta)
+    j6 = r*np.sin(phi) * np.cos(theta)
+    j7 = np.cos(theta)
+    j8 = 0
+    j9 = -r*np.cos(theta)
+    jac = np.array([[j1,j2,j3],[j4,j5,j6],[j7,j8,j9]])
+    sphereBlock = jac.T @ block @ jac
+    return sphereBlock
+
+
+
 @nb.njit(parallel=True)
 def gCov(evals, evecs, i, j):
     n_e = evals.shape[0]
@@ -309,7 +391,7 @@ def gCon_c(evals, evecs, c, row, col):
 
 
 def con_c(evals, evecs, c, row, col):
-    from pythranFuncs import cov
+    # from pythranFuncs import cov
     n_d = int(evecs.shape[0] / 3)
     n_e = evals.shape[0]
 

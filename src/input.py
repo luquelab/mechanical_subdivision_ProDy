@@ -1,20 +1,16 @@
-pdb = '1a34'
-n_modes = 100
-model = 'gnm'
-cutoff = 7.5
-eigmethod = 'eigsh'
+pdb = '5uu5'
+n_modes = 400
+model = 'anm'
+cutoff = 10
+eigmethod = 'lobpcg'
 
-mode = 'a'
+mode = 'full'
 
-prebuilt_embedding = True
+prebuilt_embedding = False
 onlyTs = False
 T = 7
-cluster_method = 'discretize'
+cluster_method = 'kmeans'
 scoreMethod = 'mean'
-cluster_start = 12
-cluster_stop = 62
+cluster_start = 4
+cluster_stop = 64
 cluster_step = 2
-
-# P22
-# SF6 5l35
-# CUS-3

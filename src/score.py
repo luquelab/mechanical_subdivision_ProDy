@@ -20,16 +20,16 @@ def calcCentroids(X, labels, n_clusters):
     return np.array(centroids), False
 
 
-def discretize_score(coords, labels):
-    for i in range(n_clusters):
-        mask = (labels==i)
-        if not np.any(mask):
-            print('Some clusters unassigned')
-
-        else:
-            clust = X[mask,:]
-            cent = np.mean(clust, axis=0)
-            centroids.append(cent)
+# def discretize_score(coords, labels):
+#     for i in range(n_clusters):
+#         mask = (labels==i)
+#         if not np.any(mask):
+#             print('Some clusters unassigned')
+#
+#         else:
+#             clust = X[mask,:]
+#             cent = np.mean(clust, axis=0)
+#             centroids.append(cent)
 
 def median_score(coords, centroids):
     from input import scoreMethod
@@ -61,50 +61,68 @@ def plotScores(pdb, n_range, save=False):
     import matplotlib
     import matplotlib.pyplot as plt
     import numpy as np
+    from make_model import getPDB
 
-    font = {'family': 'normal',
+    font = {'family': 'sans-serif',
             'weight': 'normal',
-            'size': 24}
+            'size': 10}
+
+    _, _, title = getPDB(pdb)
 
     matplotlib.rc('font', **font)
 
     scores = []
     vars = []
     ntypes = []
+    inerts = []
     for i in range(len(n_range)):
         nc = n_range[i]
         results = np.load('../results/subdivisions/' + pdb + '/' + pdb + '_' + str(nc) + '_results.npz')
         score = results['score']
         ntype = results['ntypes']
         var = results['var']
+        inert = results['inertia']
         scores.append(score)
         vars.append(var)
         ntypes.append(ntype)
+        inerts.append(inert)
     scores = np.array(scores)
     vars = np.array(vars)
     ntypes = np.array(ntypes)
     print('Plotting')
-    fig, ax = plt.subplots(2, 1, figsize=(16, 10), sharex=True)
-    fig.suptitle(pdb)
-    ax[0].scatter(n_range, scores, marker='D')
+    fig, ax = plt.subplots(3, 1, figsize=(9, 5), sharex=True)
+    fig.suptitle('k profile: ' + title.title() + ' (' + pdb + ')')
+    ax[0].scatter(n_range, scores, marker='D', s=15)
     ax[0].plot(n_range, scores)
     ax[1].plot(n_range, ntypes)
-    ax[1].scatter(n_range, ntypes)
-    ax[1].set_ylabel('# Of Unique Clusters')
-    ax[0].axvline(x=n_range[np.argmax(scores)], label='Best Score' , color='black')
+    ax[1].scatter(n_range, ntypes, marker='D', s=15)
+    ax[2].scatter(n_range, inerts, marker='D', s=15)
+    ax[2].plot(n_range, inerts)
+    ax[0].axvline(x=n_range[np.argmax(scores)], label='Best Score = ' + str(n_range[np.argmax(scores)]) , color='black')
     ax[1].axvline(x=n_range[np.argmax(scores)], label='Best Score', color='black')
     nc = str(n_range[np.argmax(scores)])
     # ax[0].set_xticks(n_range)
-    ticks = ax[1].get_xticks()
+    ticks = ax[0].get_xticks()
     ticks = np.append(ticks, n_range[np.argmax(scores)])
-    ax[1].set_xticks(ticks)
-    ax[1].set_xlabel('# Of Clusters')
-    ax[0].set_ylabel('Quality Score')
+    ax[2].set_xticks(ticks, fontsize=6)
+    ax[2].set_xlim([0, n_range[-1]])
+    ax[2].set_xlabel('# Of Clusters')
+    ax[0].set_ylabel('Quality' + '\n' + 'Score', rotation='horizontal', ha='center', va='center', labelpad=25)
+    ax[1].set_ylabel('# Unique \n Clusters', rotation='horizontal', ha='center', va='center', labelpad=25)
+    ax[2].set_ylabel('Cluster \n Inertia', rotation='horizontal', ha='center', va='center', labelpad=25)
+
+    ax[0].tick_params(axis='y', labelsize=8)
+    ax[1].tick_params(axis='y', labelsize=8)
+    ax[2].tick_params(axis='y', labelsize=8)
+
+    ax[0].grid()
+    ax[1].grid()
+    ax[2].grid()
     ax[0].legend()
-    fig.tight_layout()
+    # fig.tight_layout()
     print(pdb + '_' + nc + '_domains.png')
     if save:
-        plt.savefig('../results/subdivisions/' + pdb + '_' + nc + '_domains.png')
+        plt.savefig('../results/subdivisions/' + pdb + '_' + nc + '_domains.svg')
     plt.show()
 
 def clustFlucts(labels, pdb):
@@ -121,39 +139,8 @@ def clustFlucts(labels, pdb):
     plt.show()
 
 
-def globalPressure(coords, hess, gamma):
-    from scipy import sparse
-    from scipy.spatial import ConvexHull
-    # center coords
 
-    print(coords.shape)
-    n_atoms = coords.shape[0]
-    centroid = coords.mean(axis=0)
-    print(centroid.shape)
-    coords += centroid
-    hull = ConvexHull(coords)
-    vol = hull.volume
-    lens = np.linalg.norm(coords, axis=1)
-    # rAvg = np.mean(lens)
 
-    hess = gamma*hess
-    vs = [0]
-    volumes = [vol]
-    for i in range(200):
-        norms = coords * 1/lens[:,np.newaxis]
-        ncoords = ((i-100+1)/50)*norms
-        vec = ncoords.flatten()
-        v = 1/2 * np.dot(vec.T, hess.dot(vec))
-        volcoords = coords + ncoords
-        hull = ConvexHull(volcoords)
-        vol = hull.volume
-        vs.append(v)
-        volumes.append(vol)
-    print(vs)
-    fig, ax = plt.subplots(figsize=(10,10))
-    ax.scatter(volumes, vs, label='volume vs pressure')
-    ax.legend()
-    plt.show()
 
 # def vStress(i,j, hess, evec):
 #     vec =
@@ -177,6 +164,9 @@ def collectivity(sqFlucts):
     # print('Collectivity Of Motion', kc)
     return kc
 
+def meanStiff(evals):
+    return 1/np.sum(1/evals[:100])
+
 def meanCollect(evecs, evals, bfactors):
     n = evals.shape[0]
     meank = 0
@@ -192,3 +182,154 @@ def meanCollect(evecs, evals, bfactors):
     meank = meank/n
     print('Mean Collectivity Of Motion', meank)
     return meank
+
+def forcedDisplacement(evals, evecs, forcevec):
+    n = evals.shape[0]
+    displacement = np.zeros_like(forcevec)
+    for i in range(n):
+        mode = evecs[:, i]
+        displacement += 1/evals[i] * mode * mode.dot(forcevec)
+
+    return displacement
+
+def effectiveSpringConstant(coords, evals, evecs):
+    from scipy.spatial import ConvexHull
+    n = evals.shape[0]
+    print(coords.shape)
+    n_atoms = coords.shape[0]
+    centroid = coords.mean(axis=0)
+    print(centroid.shape)
+    coords -= centroid
+    hull = ConvexHull(coords)
+    vol1 = hull.volume
+    baseRads = np.linalg.norm(coords, axis=1)
+    baseRad = np.linalg.norm(coords, axis=1).mean()
+    print(baseRad)
+    lens = np.linalg.norm(coords, axis=1)
+    norms = coords * 1 / lens[:, np.newaxis]
+    nsteps = 300
+    rads = np.zeros(nsteps)
+    vols = np.zeros(nsteps)
+    forces = np.zeros(nsteps)
+    dRads = np.zeros((n_atoms, nsteps))
+    for i in range(nsteps):
+        forces[i] = ((i+1 - int(nsteps/2))/500)
+        forcevec = forces[i]*norms
+        forcevec = forcevec.flatten()
+        delta = forcedDisplacement(evals, evecs, forcevec)
+        delta = np.reshape(delta, (-1, 3))
+        dcoords = coords + delta
+        hull = ConvexHull(dcoords)
+        vol = hull.volume
+        vols[i] = vol-vol1
+        dRad = np.linalg.norm(dcoords, axis=1)
+        dRads[:,i] = dRad - baseRads
+        meanRad = dRads.mean()
+        rads[i] = meanRad - baseRad
+
+    stifnesses = np.zeros(n_atoms)
+    for i in range(n_atoms):
+        rdp, _, _, _ = np.linalg.lstsq(forces[:, np.newaxis], dRads[i,:])
+        stifnesses[i] = 1/rdp[0]
+
+    rdp, _, _, _ = np.linalg.lstsq(forces[:,np.newaxis], vols)
+    print(rdp)
+    compressibilty = rdp/vol1
+    print('compressibility: ', compressibilty)
+    print('vol', vol1)
+    fig, ax = plt.subplots(figsize=(10, 10))
+    ax.scatter(forces, vols, label='pressure vs volume')
+    ax.legend()
+    plt.show()
+    print(stifnesses.shape)
+    return compressibilty, stifnesses
+
+def globalPressure(coords, hess, gamma):
+    from scipy import sparse
+    from scipy.spatial import ConvexHull
+    # center coords
+
+    print(coords.shape)
+    n_atoms = coords.shape[0]
+    centroid = coords.mean(axis=0)
+    print(centroid.shape)
+    coords += centroid
+    hull = ConvexHull(coords)
+    vol1 = hull.volume
+    print('vol', vol1)
+    lens = np.linalg.norm(coords, axis=1)
+    # rAvg = np.mean(lens)
+
+    hess = gamma*hess
+    vs = [0]
+    volumes = [0]
+    for i in range(200):
+        norms = coords * 1/lens[:,np.newaxis]
+        ncoords = ((i-100+1)/500)*norms
+        vec = ncoords.flatten()
+        v = 1/2 * np.dot(vec.T, hess.dot(vec))
+        volcoords = coords + ncoords
+        hull = ConvexHull(volcoords)
+        vol = hull.volume
+        vs.append(v)
+        volumes.append(vol - vol1)
+    a = fitBulk(np.array(volumes), vs)
+    bulkmod = vol1*a
+    line = parabola(np.array(volumes), a)
+    fig, ax = plt.subplots(figsize=(10,10))
+    ax.scatter(volumes, vs, label='volume vs pressure')
+    ax.plot(volumes, line, label='volume vs pressure')
+    ax.legend()
+    plt.show()
+
+    return bulkmod
+
+def parabola(x, b):
+    return 1/2*b*x**2
+
+def fitBulk(volumes, energies):
+    from scipy.optimize import curve_fit
+    popt, pcov = curve_fit(parabola, volumes, energies)
+    print(popt)
+    return popt
+
+def stresses(hess, distFlucts):
+    n_atoms = distFlucts.shape[0]
+    # real stresses can be sum over distance outer products weighted by distance fluctuations
+    hess = hess.tobsr(blocksize=(3,3))
+    resStress = np.zeros((n_atoms,3,3))
+    for i in range(3):
+        drow = distFlucts.data[distFlucts.indptr[i]:distFlucts.indptr[i+1]]
+        hrow = hess.data[hess.indptr[i]:hess.indptr[i+1]]
+        diagColumn = hess.indices[hess.indptr[i]:hess.indptr[i+1]]
+        dInd = np.argwhere(diagColumn==i)
+        hrow[dInd[0]] = np.zeros((3,3))
+        resStress[i] = hrow.sum(axis=0)
+
+    return resStress
+
+    # print('block row', brow.sum(axis=0))
+    #stress = hess.sum(axis=1)
+    #print('stress shape', stress.shape)
+
+def overlapStiffness(evals, evecs, coords):
+    n = evals.shape[0]
+    print(coords.shape)
+    n_atoms = coords.shape[0]
+    centroid = coords.mean(axis=0)
+    print(centroid.shape)
+    coords -= centroid
+    lens = np.linalg.norm(coords, axis=1)
+    norms = coords * 1 / lens[:, np.newaxis]
+    norms = norms.flatten()
+    k = 0
+    d = 0
+    for i in range(len(evals)):
+        e = evals[i]
+        vec = evecs[:,i]
+
+        overlap = vec.dot(norms)/(np.linalg.norm(vec)*np.linalg.norm(norms))
+        d += np.sqrt(overlap**2)
+        k += np.sqrt(e)*overlap
+
+    return k

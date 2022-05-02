@@ -18,7 +18,6 @@ def springFit(bfactors, sqFlucts):
     #a = springFit2(bfactors, sqFlucts)
     huber = HuberRegressor(fit_intercept=False).fit(sqFlucts, bfactors)
     a = huber.coef_
-    print(a)
     return a
 
 def springFit2(bfactors, sqFlucts):
@@ -35,9 +34,10 @@ def fluctFit(evals, evecs, bfactors):
     coeffs = []
     ks = []
     flucts = []
-    minModes = 60
+    from input import n_modes
+    minModes = int(0.1*n_modes)
     for n_modes in range(len(evals)):
-        if n_modes==0:
+        if n_modes < minModes:
             continue
         c, k, fluct = costFunc(evals, evecs, bfactors, n_modes)
         coeffs.append(c)
@@ -47,7 +47,7 @@ def fluctFit(evals, evecs, bfactors):
     coeff = np.max(coeffs)
     kbest = ks[nModes-1]
     fluct = flucts[nModes-1]
-    return nModes, coeff, kbest, fluct
+    return int(nModes+minModes), coeff, kbest[0], fluct
 
 
 

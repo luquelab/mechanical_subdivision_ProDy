@@ -53,7 +53,7 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
 
     start = time.time()
     from input import cluster_method as method
-    labels, scores, var, ntypes = cluster_embedding(n_range, maps, calphas, method)
+    labels, scores, var, ntypes, inerts = cluster_embedding(n_range, maps, calphas, method)
     end = time.time()
     print(end - start, ' Seconds')
 
@@ -63,6 +63,7 @@ def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
     from score import plotScores
 
     from score import clustFlucts
+    import matplotlib.pyplot as plt
     clustFlucts(labels[n_best], pdb)
     plotScores(pdb, n_range, save=True)
 
@@ -101,6 +102,7 @@ def cluster_embedding(n_range, maps, calphas, method):
     scores = []
     variances = []
     numtypes = []
+    inerts = []
     print('mapshape', maps.shape)
     for n in range(len(n_range)):
         n_clusters = n_range[n]
@@ -108,11 +110,6 @@ def cluster_embedding(n_range, maps, calphas, method):
         normalize(emb, copy=False)
 
         print('Clusters: ' + str(n_clusters))
-        start1 = time.time()
-        # mbk = MiniBatchKMeans(n_clusters=n_clusters, batch_size=4096, n_init=10, reassignment_ratio=0.15, max_no_improvement=10).fit(maps[:, :n_clusters])
-        # mbk = DBSCAN(n_clusters=n_clusters, eps=0.25).fit(maps[:, :n_clusters])
-        # label = mbk.labels_
-        # centroids = mbk.cluster_centers_
         print(method)
         print('emshape', emb.shape)
         if method == 'discretize':
@@ -123,14 +120,15 @@ def cluster_embedding(n_range, maps, calphas, method):
 
 
         elif method == 'kmeans':
-            centroids, label, _, n_iter = k_means(emb, n_clusters=n_clusters, n_init=10, tol=1e-8,
+            centroids, label, inert, n_iter = k_means(emb, n_clusters=n_clusters, n_init=10, tol=0,
                                                   return_n_iter=True)
         elif method == 'both':
             label = discretize(emb)
             centroids = calcCentroids(emb, label, n_clusters)
             normalize(centroids, copy=False)
-            centroids, label, _, n_iter = k_means(emb, n_clusters=n_clusters, init=discreteInit,
+            centroids, label, inert, n_iter = k_means(emb, n_clusters=n_clusters, init=discreteInit,
                                                       return_n_iter=True)
+
         else:
             print('method should be kmeans or discretize. Defaulting to kmeans')
 
@@ -140,14 +138,6 @@ def cluster_embedding(n_range, maps, calphas, method):
         cl = np.unique(label)
         print(cl.shape)
         end1 = time.time()
-
-        # start2 = time.time()
-        # centroids, label, _, n_iter = k_means(maps[:, :n_clusters], n_clusters=n_clusters, n_init=10, tol=1e-8, return_n_iter=True)
-        # end2 = time.time()
-        # print('mbk improvement:' + str((end1-start1)/(end2-start2)))
-        # print(n_iter)
-        # kmed = KMedoids(n_clusters=n_clusters).fit(maps[:, :n_clusters])
-        # _, label, _ = spherical_k_means(maps[:, :n_clusters], n_clusters=n_clusters)
 
         print('Scoring')
         testScore = median_score(emb, centroids)
@@ -163,12 +153,13 @@ def cluster_embedding(n_range, maps, calphas, method):
         var, ntypes = cluster_types(label)
         variances.append(var)
         numtypes.append(ntypes)
+        inerts.append(inert)
         print('Memory Usage: ', psutil.virtual_memory().percent)
 
         print('Saving Results')
         nc = str(n_range[n])
         np.savez('../results/subdivisions/' + pdb + '/' + pdb + '_' + nc + '_results', labels=label, score=testScore,
-                 var=var, ntypes=ntypes, n=n, method=cluster_method)
+                 var=var, ntypes=ntypes, n=n, method=cluster_method, inertia=inert)
 
     best = np.argpartition(scores, -5)[-5:]  # indices of 4 best scores
     for ind in best:
@@ -176,7 +167,7 @@ def cluster_embedding(n_range, maps, calphas, method):
                  beta=labels[ind],
                  hybrid36=True)
 
-    return labels, scores, variances, numtypes
+    return labels, scores, variances, numtypes, inerts
 
 def discreteInit(vectors, n_clusters, *, copy=False, max_svd_restarts=30, n_iter_max=20, random_state=None):
     from score import calcCentroids
