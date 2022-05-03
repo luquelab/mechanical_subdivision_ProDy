@@ -173,13 +173,16 @@ def modeCalc(pdb, hess, kirch, n_modes, method):
 def loadModes(pdb, n_modes):
     from input import model
     if model=='anm':
-        modes = np.load('../results/models/' + pdb + 'modes.npz')
+        modes = np.load('../results/models/' + pdb + model + 'modes.npz')
         evals = modes['evals'][:n_modes].copy()
         evecs = modes['evecs'][:, :n_modes].copy()
     else:
-        model = loadModel('../results/models/' + pdb + 'gnm.npz')
-        evals = model.getEigvals()[:n_modes].copy()
-        evecs = model.getEigvecs()[:, :n_modes].copy()
+        modes = np.load('../results/models/' + pdb + model + 'modes.npz')
+        evals = modes['evals'][:n_modes].copy()
+        evecs = modes['evecs'][:, :n_modes].copy()
+        # model = loadModel('../results/models/' + pdb + model + 'modes.npz')
+        # evals = model.getEigvals()[:n_modes].copy()
+        # evecs = model.getEigvecs()[:, :n_modes].copy()
     print('Slicing Modes up to ' + str(n_modes))
     print()
 
@@ -226,7 +229,7 @@ def mechanicalProperties(bfactors, evals, evecs, coords, hess):
     import matplotlib.pyplot as plt
     from optcutoff import fluctFit
     from score import collectivity, meanCollect, effectiveSpringConstant, overlapStiffness, globalPressure
-
+    _, _, title = getPDB(pdb)
     print('Plotting')
     nModes, coeff, k, sqFlucts = fluctFit(evals, evecs, bfactors)
 
@@ -236,11 +239,11 @@ def mechanicalProperties(bfactors, evals, evecs, coords, hess):
     # print('Bulk Modulus 1: ', bulkmod)
     # print('Bulk Modulus 2: ', 1 / compressibility)
     # plt.rcParams['text.usetex'] = True
-    fig, ax = plt.subplots(1, 1, figsize=(16, 6))
+    fig, ax = plt.subplots(1, 1, figsize=(10, 5))
     font = {'family': 'sans-serif',
             'weight': 'normal',
-            'size': 16}
-    # matplotlib.rc('font', **font)
+            'size': 11}
+    matplotlib.rc('font', **font)
     # kb = 1.38065 * 10**-23
     # T = 293
     # da = 110*1.66*10**-27
@@ -256,12 +259,15 @@ def mechanicalProperties(bfactors, evals, evecs, coords, hess):
     np.savez('../results/subdivisions/' + pdb + '_sqFlucts.npz', sqFlucts=sqFlucts, k=k, cc=coeff, nModes=nModes)
     ax.plot(np.arange(bfactors.shape[0])[:int(n_asym)], bfactors[:int(n_asym)], label='B-factors')
     ax.plot(np.arange(sqFlucts.shape[0])[:int(n_asym)], sqFlucts[:int(n_asym)], label='Squared Fluctuations')
-    ax.set_ylabel(r'$Å^{2}$')
-    ax.set_xlabel('Residue Number')
+    ax.set_ylabel(r'$Å^{2}$', fontsize=12)
+    ax.set_xlabel('Residue Number', fontsize=12)
+    ax.tick_params(axis='y', labelsize=8)
+    ax.tick_params(axis='x', labelsize=8)
+
     ax.legend()
-    fig.suptitle('Squared Fluctuations vs B-factors for PDB: ' + pdb  + "\n" + r' $\gamma = $' + str(gamma) + r' $k_{b}T/Å^{2}$',fontsize=16)
+    fig.suptitle('Squared Fluctuations vs B-factors: ' + title.title() + ' (' + pdb + ')' + "\n" + r' $\gamma = $' + "{:.5f}".format(gamma) + r' $k_{b}T/Å^{2}$' + '  CC = ' +"{:.5f}".format(coeff) ,fontsize=12)
     # fig.suptitle('# Modes: ' + str(nModes) + ' Corr. Coeff: ' + str(coeff) + ' Spring Constant: ' + str(gamma), fontsize=16)
-    fig.tight_layout()
+    # fig.tight_layout()
     plt.savefig('../results/subdivisions/' + pdb + '_sqFlucts.png')
     plt.show()
     return nModes, gamma

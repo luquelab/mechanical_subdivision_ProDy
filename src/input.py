@@ -1,16 +1,16 @@
-pdb = '5uu5'
-n_modes = 400
-model = 'anm'
-cutoff = 10
+pdb = '6j3q'
+n_modes = 1000
+model = 'gnm'
+cutoff = 7.5
 eigmethod = 'lobpcg'
 
-mode = 'full'
+mode = 'fa'
 
-prebuilt_embedding = False
+prebuilt_embedding = True
 onlyTs = False
 T = 7
 cluster_method = 'kmeans'
 scoreMethod = 'mean'
-cluster_start = 4
-cluster_stop = 64
-cluster_step = 2
+cluster_start = 71
+cluster_stop = 73
+cluster_step = 1
