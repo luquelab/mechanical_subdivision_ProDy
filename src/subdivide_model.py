@@ -95,7 +95,6 @@ def cluster_embedding(n_range, maps, calphas, method):
     from score import calcCentroids
     from sklearn.preprocessing import normalize
 
-    randmaps = np.random.randn(maps.shape[0]*100, maps.shape[1])
 
 
     labels = []
@@ -117,10 +116,11 @@ def cluster_embedding(n_range, maps, calphas, method):
             # while loop:
             label = discretize(emb)
             centroids, loop = calcCentroids(emb, label, n_clusters)
+            inert = 0
 
 
         elif method == 'kmeans':
-            centroids, label, inert, n_iter = k_means(emb, n_clusters=n_clusters, n_init=10, tol=0,
+            centroids, label, inert, n_iter = k_means(emb, n_clusters=n_clusters, n_init=100, tol=0,
                                                   return_n_iter=True)
         elif method == 'both':
             label = discretize(emb)
