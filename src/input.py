@@ -1,16 +1,16 @@
-pdb = '6j3q'
-n_modes = 1000
+pdb = '7eel'
+n_modes = 400
 model = 'gnm'
 cutoff = 7.5
 eigmethod = 'lobpcg'
 
-mode = 'fa'
+mode = 'full'
 
-prebuilt_embedding = True
+prebuilt_embedding = False
 onlyTs = False
 T = 7
-cluster_method = 'kmeans'
+cluster_method = 'discretize'
 scoreMethod = 'mean'
-cluster_start = 71
-cluster_stop = 73
-cluster_step = 1
+cluster_start = 72
+cluster_stop = 214
+cluster_step = 2

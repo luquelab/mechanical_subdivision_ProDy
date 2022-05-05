@@ -61,7 +61,7 @@ def make_model(pdb, n_modes, mode):
     bfactors = calphas.getBetas()
     n_modes, gamma = mechanicalProperties(bfactors, evals, evecs, coords, hess)
 
-    distFlucts = distanceFlucts(calphas, evals, evecs, kirch, n_modes, coords, hess)
+    distFlucts = distanceFlucts(evals, evecs, kirch, n_modes)
     from score import stresses
     rStress = stresses(hess, distFlucts)
     sims = fluctToSims(distFlucts, pdb)
@@ -138,7 +138,6 @@ def modeCalc(pdb, hess, kirch, n_modes, method):
     if eigmethod=='eigsh':
         evals, evecs = eigsh(hess, k=n_modes, sigma=1e-8, which='LA')
     elif eigmethod=='lobpcg':
-        from pyamg import smoothed_aggregation_solver
         from scipy.sparse.linalg import lobpcg
         # if not hasattr(np, "float128"):
         #     np.float128 = np.longdouble  # #698
@@ -183,8 +182,8 @@ def loadModes(pdb, n_modes):
         # model = loadModel('../results/models/' + pdb + model + 'modes.npz')
         # evals = model.getEigvals()[:n_modes].copy()
         # evecs = model.getEigvecs()[:, :n_modes].copy()
+    print('Loading ' + model + ' Modes')
     print('Slicing Modes up to ' + str(n_modes))
-    print()
 
     print(evecs.shape)
     kirch = sparse.load_npz('../results/models/' + pdb + 'kirch.npz')
@@ -268,18 +267,17 @@ def mechanicalProperties(bfactors, evals, evecs, coords, hess):
     fig.suptitle('Squared Fluctuations vs B-factors: ' + title.title() + ' (' + pdb + ')' + "\n" + r' $\gamma = $' + "{:.5f}".format(gamma) + r' $k_{b}T/Å^{2}$' + '  CC = ' +"{:.5f}".format(coeff) ,fontsize=12)
     # fig.suptitle('# Modes: ' + str(nModes) + ' Corr. Coeff: ' + str(coeff) + ' Spring Constant: ' + str(gamma), fontsize=16)
     # fig.tight_layout()
-    plt.savefig('../results/subdivisions/' + pdb + '_sqFlucts.png')
+    plt.savefig('../results/subdivisions/' + pdb + '_sqFlucts.svg')
     plt.show()
     return nModes, gamma
 
 
-def distanceFlucts(calphas, evals, evecs, kirch, n_modes, coords, hess):
-    print(evecs.shape[0] / n_atoms)
+def distanceFlucts(evals, evecs, kirch, n_modes):
     from scipy import sparse
     from input import model
     n_modes = int(n_modes)
+    n_atoms = kirch.shape[0]
     print(n_modes)
-    bfactors = calphas.getBetas()
     print('Direct Calculation Method')
     kirch = kirch.tocoo()
     covariance = sparse.lil_matrix((n_atoms, n_atoms))
@@ -292,7 +290,6 @@ def distanceFlucts(calphas, evals, evecs, kirch, n_modes, coords, hess):
         covariance = covariance.tocsr()
         print(covariance.min())
 
-    sqFlucts = covariance.diagonal()
     d = con_d(covariance, df, kirch.row, kirch.col)
     d = d.tocsr()
     d.eliminate_zeros()
