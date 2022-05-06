@@ -117,8 +117,6 @@ def cluster_embedding(n_range, maps, calphas, method):
             label = discretize(emb)
             centroids, loop = calcCentroids(emb, label, n_clusters)
             inert = 0
-
-
         elif method == 'kmeans':
             centroids, label, inert, n_iter = k_means(emb, n_clusters=n_clusters, n_init=100, tol=0,
                                                   return_n_iter=True)
@@ -140,14 +138,10 @@ def cluster_embedding(n_range, maps, calphas, method):
         end1 = time.time()
 
         print('Scoring')
+        from rigidity import realFlucts
         testScore = median_score(emb, centroids)
-        #testScore_rand = davies_bouldin_score(embrand, labels)
-        #testScore = silhouette_score(emb, label, jobs=-1)#/testScore_rand
-        # testScore = davies_bouldin_score(maps[:, :n_clusters], label)
-        # scores_km.append(testScore)
-        # var, ntypes = cluster_types(label)
-        # variances.append(var)
-        # numtypes.append(ntypes)
+        rigidities, _, _ = realFlucts(n_clusters, label)
+        inert = np.sum(rigidities)
 
         scores.append(testScore)
         var, ntypes = cluster_types(label)

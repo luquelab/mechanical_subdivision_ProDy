@@ -56,8 +56,8 @@ def make_model(pdb, n_modes, mode):
 
 
 
-    evPlot(evals, evecs)
-    # icoEvPlot(evals, evecs, calphas)
+    # evPlot(evals, evecs)
+    icoEvPlot(evals, evecs, calphas)
     bfactors = calphas.getBetas()
     n_modes, gamma = mechanicalProperties(bfactors, evals, evecs, coords, hess)
 
@@ -97,9 +97,12 @@ def getPDB(pdb):
     return capsid, calphas, title
 
 
+def gammaDist(dist2, *args):
+    return 1/dist2
+
 def buildHess(pdb, calphas, cutoff=10.0):
 
-    anm.buildHessian(calphas, cutoff=cutoff, kdtree=True, sparse=True)
+    anm.buildHessian(calphas, cutoff=cutoff, kdtree=True, sparse=True, gamma=gammaDist)
     sparse.save_npz('../results/models/' + pdb + 'hess.npz', anm.getHessian())
     sparse.save_npz('../results/models/' + pdb + 'kirch.npz', anm.getKirchhoff())
     kirch = anm.getKirchhoff()
@@ -108,7 +111,7 @@ def buildHess(pdb, calphas, cutoff=10.0):
 
 def buildKirch(pdb, calphas, cutoff=10.0):
 
-    anm.buildKirchhoff(calphas, cutoff=cutoff, kdtree=True, sparse=True)
+    anm.buildKirchhoff(calphas, cutoff=cutoff, kdtree=True, sparse=True, gamma=gammaDist)
     sparse.save_npz('../results/models/' + pdb + 'kirch.npz', anm.getKirchhoff())
     kirch = anm.getKirchhoff()
 
@@ -203,6 +206,7 @@ def evPlot(evals, evecs):
 
 def icoEvPlot(evals, evecs, calphas):
     import matplotlib.pyplot as plt
+    from input import pdb
     uniques, inds, counts = np.unique(evals.round(decimals=6), return_index=True, return_counts=True)
     icoEvalInds = inds[counts==1]
     print(icoEvalInds)
@@ -219,7 +223,9 @@ def icoEvPlot(evals, evecs, calphas):
     fig, ax = plt.subplots(1, 1, figsize=(16, 12))
     ax.scatter(np.arange(icoEvals.shape[0]), icoEvals, marker='D', label='eigs')
     plt.show()
-    writeNMD('test.nmd', anm[icoEvalInds], calphas)
+    from prody import sliceModel
+    anm_save, calphas_save = sliceModel(anm, calphas, calphas[:n_asym])
+    writeNMD(pdb + '_ico.nmd', anm[icoEvalInds], calphas)
 
 
 def mechanicalProperties(bfactors, evals, evecs, coords, hess):
