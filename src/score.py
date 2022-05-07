@@ -105,7 +105,7 @@ def plotScores(pdb, n_range, save=False):
     # ax[0].set_xticks(n_range)
     ticks = ax[0].get_xticks()
     ticks = np.append(ticks, n_range[np.argmax(scores)])
-    ax[2].set_xticks(ticks, fontsize=6)
+    ax[2].set_xticks(ticks)
     ax[2].set_xlim([0, n_range[-1]])
     ax[2].set_xlabel('# Of Clusters')
     ax[0].set_ylabel('Quality' + '\n' + 'Score', rotation='horizontal', ha='center', va='center', labelpad=25)

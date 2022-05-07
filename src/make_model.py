@@ -76,24 +76,37 @@ def make_model(pdb, n_modes, mode):
 
 
 def getPDB(pdb):
+    from input import pdbx
     os.chdir('../data/capsid_pdbs')
-    filename = pdb + '_full.pdb'
+    if pdbx:
+        filename = pdb + '_full.cif'
+    else:
+        filename = pdb + '_full.pdb'
     if not os.path.exists(filename):
-        vdb_url = 'https://files.rcsb.org/download/' + pdb + '.pdb.gz'
-        print(vdb_url)
-        vdb_filename = wget.download(vdb_url)
-        with gzip.open(vdb_filename, 'rb') as f_in:
+        pdb_url = 'https://files.rcsb.org/download/' + pdb
+        if pdbx:
+            pdb_url = pdb_url + '.cif.gz'
+        else:
+            pdb_url = pdb_url + '.pdb.gz'
+        print(pdb_url)
+        pdb_filename = wget.download(pdb_url)
+        with gzip.open(pdb_filename, 'rb') as f_in:
             with open(filename, 'wb') as f_out:
                 shutil.copyfileobj(f_in, f_out)
 
-    capsid, header = parsePDB(filename, header=True, biomol=True)
-    title = header['title']
+    if pdbx:
+        capsid, header = parseMMCIF(filename, biomol=True, header=True)
+        print(capsid.getTitle())
+    else:
+        capsid, header = parsePDB(filename, header=True, biomol=True)
     calphas = capsid.select('calpha').copy()
     print('Number Of Residues: ', calphas.getCoords().shape[0])
     os.chdir('../../src')
 
     writePDB('../results/subdivisions/' + pdb + '_ca.pdb', calphas,
              hybrid36=True)
+    title = header['title']
+
     return capsid, calphas, title
 
 
