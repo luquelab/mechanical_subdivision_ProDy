@@ -201,49 +201,25 @@ def effectiveSpringConstant(coords, evals, evecs):
     centroid = coords.mean(axis=0)
     print(centroid.shape)
     coords -= centroid
-    hull = ConvexHull(coords)
-    vol1 = hull.volume
     baseRads = np.linalg.norm(coords, axis=1)
-    baseRad = np.linalg.norm(coords, axis=1).mean()
-    print(baseRad)
     lens = np.linalg.norm(coords, axis=1)
     norms = coords * 1 / lens[:, np.newaxis]
-    nsteps = 300
-    rads = np.zeros(nsteps)
-    vols = np.zeros(nsteps)
-    forces = np.zeros(nsteps)
-    dRads = np.zeros((n_atoms, nsteps))
-    for i in range(nsteps):
-        forces[i] = ((i+1 - int(nsteps/2))/500)
-        forcevec = forces[i]*norms
-        forcevec = forcevec.flatten()
-        delta = forcedDisplacement(evals, evecs, forcevec)
-        delta = np.reshape(delta, (-1, 3))
-        dcoords = coords + delta
-        hull = ConvexHull(dcoords)
-        vol = hull.volume
-        vols[i] = vol-vol1
-        dRad = np.linalg.norm(dcoords, axis=1)
-        dRads[:,i] = dRad - baseRads
-        meanRad = dRads.mean()
-        rads[i] = meanRad - baseRad
+    ks = meanK(evecs, evals, norms)
 
-    stifnesses = np.zeros(n_atoms)
-    for i in range(n_atoms):
-        rdp, _, _, _ = np.linalg.lstsq(forces[:, np.newaxis], dRads[i,:])
-        stifnesses[i] = 1/rdp[0]
+    return ks
 
-    rdp, _, _, _ = np.linalg.lstsq(forces[:,np.newaxis], vols)
-    print(rdp)
-    compressibilty = rdp/vol1
-    print('compressibility: ', compressibilty)
-    print('vol', vol1)
-    fig, ax = plt.subplots(figsize=(10, 10))
-    ax.scatter(forces, vols, label='pressure vs volume')
-    ax.legend()
-    plt.show()
-    print(stifnesses.shape)
-    return compressibilty, stifnesses
+def meanK(ev, evals, d):
+    n_e = evals.shape[0]
+    ev1 = ev * 1 / np.sqrt(evals)
+    ev2 = ev * np.sqrt(evals)
+    ev1 = np.reshape(ev1, (-1, 3, n_e))
+    ev2 = np.reshape(ev2, (-1, 3, n_e))
+    top = np.zeros(ev.shape[0])
+    bot = np.zeros(ev.shape[0])
+    dot1 = np.sum(np.sum(np.abs(ev1*d[:,:,np.newaxis]), axis=1), axis=-1)
+    dot2 = np.sum(np.sum(np.abs(ev2 * d[:, :, np.newaxis]), axis=1), axis=-1)
+    print(dot2)
+    return dot1/dot2
 
 def globalPressure(coords, hess, gamma):
     from scipy import sparse

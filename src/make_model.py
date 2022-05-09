@@ -234,10 +234,12 @@ def mechanicalProperties(bfactors, evals, evecs, coords, hess):
     import matplotlib.pyplot as plt
     from optcutoff import fluctFit
     from score import collectivity, meanCollect, effectiveSpringConstant, overlapStiffness, globalPressure
-    _, _, title = getPDB(pdb)
+    _, calphas, title = getPDB(pdb)
     print('Plotting')
     nModes, coeff, k, sqFlucts = fluctFit(evals, evecs, bfactors)
-
+    ks = effectiveSpringConstant(coords, evals, evecs)
+    writePDB('../results/subdivisions/' + pdb + '/' + pdb + '_' + '_stifftest.pdb', calphas, beta=ks,
+              hybrid36=True)
     #compressibility, stiffneses = effectiveSpringConstant(coords, evals[:nModes], evecs[:,:nModes])
     from score import globalPressure
     # bulkmod = globalPressure(coords, hess, 1)
