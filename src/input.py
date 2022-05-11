@@ -1,16 +1,16 @@
-pdb = '7eel'
-n_modes = 400
-model = 'gnm'
-cutoff = 7.5
-eigmethod = 'lobpcg'
+pdb = '7mu1'
+n_modes = 300
+model = 'anm'
+cutoff = 10
+eigmethod = 'eigsh'
 
-mode = 'full'
+mode = 'eigs'
 
-prebuilt_embedding = False
+prebuilt_embedding = True
 onlyTs = False
 T = 7
 cluster_method = 'discretize'
 scoreMethod = 'mean'
-cluster_start = 72
-cluster_stop = 214
+cluster_start = 12
+cluster_stop = 500
 cluster_step = 2

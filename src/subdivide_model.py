@@ -140,8 +140,8 @@ def cluster_embedding(n_range, maps, calphas, method):
         print('Scoring')
         from rigidity import realFlucts
         testScore = median_score(emb, centroids)
-        rigidities, _, _ = realFlucts(n_clusters, label)
-        inert = np.sum(rigidities)
+        #rigidities, _, _ = realFlucts(n_clusters, label)
+        #inert = np.sum(rigidities)
 
         scores.append(testScore)
         var, ntypes = cluster_types(label)
