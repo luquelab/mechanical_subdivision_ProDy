@@ -99,7 +99,7 @@ def getPDB(pdb):
         print(capsid.getTitle())
     else:
         capsid, header = parsePDB(filename, header=True, biomol=True)
-    calphas = capsid.select('protein and name CA CB').copy()
+    calphas = capsid.select('protein and name CA').copy()
     print('Number Of Residues: ', calphas.getCoords().shape[0])
     os.chdir('../../src')
 
@@ -114,13 +114,15 @@ def gammaDist(dist2, *args):
     return 1/dist2
 
 def buildHess(pdb, calphas, cutoff=10.0):
+    from anm import hessBuild
+    anm = ANM(pdb + '_full')
+    kirch, hess = hessBuild(calphas, calphas.getCoords(), cutoff)
+    #anm.setHessian(hess)
+    #anm._kirchhoff = kirch
+    sparse.save_npz('../results/models/' + pdb + 'hess.npz', hess)
+    sparse.save_npz('../results/models/' + pdb + 'kirch.npz', kirch)
 
-    anm.buildHessian(calphas, cutoff=cutoff, kdtree=True, sparse=True, gamma=gammaDist)
-    sparse.save_npz('../results/models/' + pdb + 'hess.npz', anm.getHessian())
-    sparse.save_npz('../results/models/' + pdb + 'kirch.npz', anm.getKirchhoff())
-    kirch = anm.getKirchhoff()
-
-    return anm.getHessian(), kirch
+    return hess, kirch
 
 def buildKirch(pdb, calphas, cutoff=10.0):
 

@@ -2,8 +2,8 @@ import os
 import time
 
 from prody import *
-from sklearnex import patch_sklearn
-patch_sklearn()
+# from sklearnex import patch_sklearn
+# patch_sklearn()
 import numpy as np
 import matplotlib.pyplot as plt
 import psutil

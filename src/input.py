@@ -1,10 +1,11 @@
-pdb = '7mu1'
-n_modes = 300
+pdb = '3dkt'
+pdbx = False
+n_modes = 240
 model = 'anm'
 cutoff = 10
-eigmethod = 'eigsh'
+eigmethod = 'lobpcg'
 
-mode = 'eigs'
+mode = 'full'
 
 prebuilt_embedding = True
 onlyTs = False
