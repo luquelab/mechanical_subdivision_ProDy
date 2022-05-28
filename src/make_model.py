@@ -46,7 +46,7 @@ def make_model(pdb, n_modes, mode):
     if mode == 'eigs':
         evals, evecs, kirch = loadModes(pdb, n_modes)
     else:
-        evals, evecs = modeCalc(pdb, hess, kirch, n_modes, eigmethod)
+        evals, evecs = modeCalc(pdb, hess, kirch, n_modes, eigmethod, model)
 
     # anm._n_atoms = n_atoms
     # anm._vars = 1/evals
@@ -56,10 +56,10 @@ def make_model(pdb, n_modes, mode):
 
 
 
-    # evPlot(evals, evecs)
-    icoEvPlot(evals, evecs, calphas)
+    evPlot(evals, evecs)
+    # icoEvPlot(evals, evecs, calphas)
     bfactors = calphas.getBetas()
-    n_modes, gamma = mechanicalProperties(bfactors, evals, evecs, coords, hess)
+    nm, gamma = mechanicalProperties(bfactors, evals, evecs, coords, hess)
 
     distFlucts = distanceFlucts(evals, evecs, kirch, n_modes)
     from score import stresses
@@ -99,11 +99,11 @@ def getPDB(pdb):
         print(capsid.getTitle())
     else:
         capsid, header = parsePDB(filename, header=True, biomol=True)
-    calphas = capsid.select('calpha').copy()
+    calphas = capsid.select('protein and name CA CB').copy()
     print('Number Of Residues: ', calphas.getCoords().shape[0])
     os.chdir('../../src')
 
-    writePDB('../results/subdivisions/' + pdb + '_ca.pdb', calphas,
+    writePDB('../results/subdivisions/' + pdb + '_ca_prot.pdb', calphas,
              hybrid36=True)
     title = header['title']
 
@@ -133,7 +133,7 @@ def buildKirch(pdb, calphas, cutoff=10.0):
 
 def loadHess(pdb):
     hess = sparse.load_npz('../results/models/' + pdb + 'hess.npz')
-    anm._hessian = hess
+    # anm._hessian = hess
     kirch = sparse.load_npz('../results/models/' + pdb + 'kirch.npz')
     return hess, kirch
 
@@ -142,36 +142,32 @@ def loadKirch(pdb):
     return kirch
 
 
-def modeCalc(pdb, hess, kirch, n_modes, method):
-    from input import model, eigmethod
+def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model):
+    #from input import model#, eigmethod
     print('Calculating Normal Modes')
     start = time.time()
+
 
     if model=='anm':
         mat = hess
     else:
         mat = kirch
+
+    n_dim = mat.shape[0]
     if eigmethod=='eigsh':
-        evals, evecs = eigsh(hess, k=n_modes, sigma=1e-8, which='LA')
+        evals, evecs = eigsh(mat, k=n_modes, sigma=1e-8, which='LA')
     elif eigmethod=='lobpcg':
         from scipy.sparse.linalg import lobpcg
-        # if not hasattr(np, "float128"):
-        #     np.float128 = np.longdouble  # #698
-        # diag_shift = 1e-5 * sparse.eye(mat.shape[0])
-        # mat += diag_shift
-        # ml = smoothed_aggregation_solver(hess)
-        # M = ml.aspreconditioner()
-        #
-        # hess -= diag_shift
+
         epredict = np.random.rand(n_dim, n_modes+6)
-        evals, evecs = lobpcg(hess, epredict, largest=False, tol=0, maxiter=n_dim)
+        evals, evecs = lobpcg(mat, epredict, largest=False, tol=0, maxiter=n_dim)
         evals = evals[6:]
         evecs = evecs[:,6:]
         print(evecs.shape)
     elif eigmethod=='lobcuda':
         import cupy as cp
         from cupyx.scipy.sparse.linalg import lobpcg as clobpcg
-        sparse_gpu = cp.sparse.csr_matrix(hess.astype(cp.float32))
+        sparse_gpu = cp.sparse.csr_matrix(mat.astype(cp.float32))
         epredict = cp.random.rand(n_dim, n_modes+6)
         evals, evecs = clobpcg(sparse_gpu, epredict, largest=False, tol=0, maxiter=n_dim)
         evals = cp.asnumpy(evals[6:])
@@ -188,7 +184,11 @@ def modeCalc(pdb, hess, kirch, n_modes, method):
 def loadModes(pdb, n_modes):
     from input import model
     if model=='anm':
-        modes = np.load('../results/models/' + pdb + model + 'modes.npz')
+        filename = '../results/models/' + pdb + model + 'modes.npz'
+        if not os.path.exists(filename):
+            filename = '../results/models/' + pdb + 'modes.npz'
+        print(filename)
+        modes = np.load(filename)
         evals = modes['evals'][:n_modes].copy()
         evecs = modes['evecs'][:, :n_modes].copy()
     else:
@@ -250,9 +250,9 @@ def mechanicalProperties(bfactors, evals, evecs, coords, hess):
     _, calphas, title = getPDB(pdb)
     print('Plotting')
     nModes, coeff, k, sqFlucts = fluctFit(evals, evecs, bfactors)
-    ks = effectiveSpringConstant(coords, evals, evecs)
-    writePDB('../results/subdivisions/' + pdb + '/' + pdb + '_' + '_stifftest.pdb', calphas, beta=ks,
-              hybrid36=True)
+    # ks = effectiveSpringConstant(coords, evals, evecs)
+    # writePDB('../results/subdivisions/' + pdb + '/' + pdb + '_' + '_stifftest.pdb', calphas, beta=ks,
+    #           hybrid36=True)
     #compressibility, stiffneses = effectiveSpringConstant(coords, evals[:nModes], evecs[:,:nModes])
     from score import globalPressure
     # bulkmod = globalPressure(coords, hess, 1)
@@ -333,7 +333,7 @@ def fluctToSims(d, pdb):
     d = d.tocsr()
     d.eliminate_zeros()
     nnDistFlucts = np.mean(np.sqrt(d.data))
-
+    print(nnDistFlucts)
     sigma = 1 / (2 * nnDistFlucts ** 2)
     sims = -sigma * d ** 2
     data = sims.data
