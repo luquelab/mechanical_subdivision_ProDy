@@ -29,11 +29,7 @@ def make_model(pdb, n_modes, mode):
         anm = ANM(pdb + '_full')
 
     if mode =='full':
-        if model == 'gnm':
-            kirch = buildKirch(pdb, calphas, cutoff)
-            hess = kirch
-        else:
-            hess, kirch = buildHess(pdb, calphas, cutoff)
+        hess, kirch = buildModel(pdb, calphas, cutoff)
     else:
         if model == 'gnm':
             kirch = loadKirch(pdb)
@@ -77,11 +73,11 @@ def make_model(pdb, n_modes, mode):
 
 def getPDB(pdb):
     from input import pdbx
-    os.chdir('../data/capsid_pdbs')
+    #os.chdir('../data/capsid_pdbs')
     if pdbx:
-        filename = pdb + '_full.cif'
+        filename = '../data/capsid_pdbs/' + pdb + '_full.cif'
     else:
-        filename = pdb + '_full.pdb'
+        filename = '../data/capsid_pdbs/' + pdb + '_full.pdb'
     if not os.path.exists(filename):
         pdb_url = 'https://files.rcsb.org/download/' + pdb
         if pdbx:
@@ -99,9 +95,14 @@ def getPDB(pdb):
         print(capsid.getTitle())
     else:
         capsid, header = parsePDB(filename, header=True, biomol=True)
-    calphas = capsid.select('protein and name CA').copy()
+
+    from input import cbeta
+    if cbeta:
+        calphas = capsid.select('protein and name CA CB').copy()
+    else:
+        calphas = capsid.select('protein and name CA').copy()
     print('Number Of Residues: ', calphas.getCoords().shape[0])
-    os.chdir('../../src')
+    #os.chdir('../../src')
 
     writePDB('../results/subdivisions/' + pdb + '_ca_prot.pdb', calphas,
              hybrid36=True)
@@ -113,24 +114,17 @@ def getPDB(pdb):
 def gammaDist(dist2, *args):
     return 1/dist2
 
-def buildHess(pdb, calphas, cutoff=10.0):
-    from anm import hessBuild
+def buildModel(pdb, calphas, cutoff=10.0):
+    from anm import buildENM
+    from input import model
     anm = ANM(pdb + '_full')
-    kirch, hess = hessBuild(calphas, calphas.getCoords(), cutoff)
+    kirch, hess = buildENM(calphas, calphas.getCoords(), cutoff, model=model)
     #anm.setHessian(hess)
     #anm._kirchhoff = kirch
     sparse.save_npz('../results/models/' + pdb + 'hess.npz', hess)
     sparse.save_npz('../results/models/' + pdb + 'kirch.npz', kirch)
 
     return hess, kirch
-
-def buildKirch(pdb, calphas, cutoff=10.0):
-
-    anm.buildKirchhoff(calphas, cutoff=cutoff, kdtree=True, sparse=True, gamma=gammaDist)
-    sparse.save_npz('../results/models/' + pdb + 'kirch.npz', anm.getKirchhoff())
-    kirch = anm.getKirchhoff()
-
-    return kirch
 
 
 def loadHess(pdb):
@@ -250,34 +244,26 @@ def mechanicalProperties(bfactors, evals, evecs, coords, hess):
     from optcutoff import fluctFit
     from score import collectivity, meanCollect, effectiveSpringConstant, overlapStiffness, globalPressure
     _, calphas, title = getPDB(pdb)
+    names = calphas.getNames()
+    # ab = np.array([True if x == 'CA' else False for x in names])
+    # evecs = evecs[ab]
+    # bfactors = bfactors[ab]
+    print(evecs.shape)
+
     print('Plotting')
     nModes, coeff, k, sqFlucts = fluctFit(evals, evecs, bfactors)
-    # ks = effectiveSpringConstant(coords, evals, evecs)
-    # writePDB('../results/subdivisions/' + pdb + '/' + pdb + '_' + '_stifftest.pdb', calphas, beta=ks,
-    #           hybrid36=True)
-    #compressibility, stiffneses = effectiveSpringConstant(coords, evals[:nModes], evecs[:,:nModes])
-    from score import globalPressure
-    # bulkmod = globalPressure(coords, hess, 1)
-    # print('Bulk Modulus 1: ', bulkmod)
-    # print('Bulk Modulus 2: ', 1 / compressibility)
-    # plt.rcParams['text.usetex'] = True
+
     fig, ax = plt.subplots(1, 1, figsize=(10, 5))
     font = {'family': 'sans-serif',
             'weight': 'normal',
             'size': 11}
     matplotlib.rc('font', **font)
-    # kb = 1.38065 * 10**-23
-    # T = 293
-    # da = 110*1.66*10**-27
-    # angs = 10^20
-    # scaledKb = T*kb*da*angs
+
     gamma = (8 *np.pi**2)/k
 
     print(nModes, coeff, gamma)
-    kc = collectivity(sqFlucts)
-    kcmean = meanCollect(evecs, evals, bfactors)
     from score import meanStiff
-    mstiff = meanStiff(evals)
+    n_asym = int(evecs.shape[0]/60)
     np.savez('../results/subdivisions/' + pdb + '_sqFlucts.npz', sqFlucts=sqFlucts, k=k, cc=coeff, nModes=nModes)
     ax.plot(np.arange(bfactors.shape[0])[:int(n_asym)], bfactors[:int(n_asym)], label='B-factors')
     ax.plot(np.arange(sqFlucts.shape[0])[:int(n_asym)], sqFlucts[:int(n_asym)], label='Squared Fluctuations')
