@@ -31,23 +31,29 @@ def l1Cost(bfactors, sqFlucts, a):
     return np.sum(np.abs(bfactors - a * sqFlucts))
 
 def fluctFit(evals, evecs, bfactors):
+    fitmodes = False
     coeffs = []
     ks = []
     flucts = []
     from input import n_modes
     minModes = int(0.1*n_modes)
-    for n_modes in range(len(evals)):
-        if n_modes < minModes:
-            continue
+    if fitmodes:
+        for n_modes in range(len(evals)):
+            if n_modes < minModes:
+                continue
+            c, k, fluct = costFunc(evals, evecs, bfactors, n_modes)
+            coeffs.append(c)
+            ks.append(k)
+            flucts.append(fluct)
+        nModes = np.argmax(coeffs)+1
+        coeff = np.max(coeffs)
+        kbest = ks[nModes-1]
+        fluct = flucts[nModes-1]
+        return int(nModes+minModes), coeff, kbest[0], fluct
+    else:
+        n_modes = evals.shape[0]
         c, k, fluct = costFunc(evals, evecs, bfactors, n_modes)
-        coeffs.append(c)
-        ks.append(k)
-        flucts.append(fluct)
-    nModes = np.argmax(coeffs)+1
-    coeff = np.max(coeffs)
-    kbest = ks[nModes-1]
-    fluct = flucts[nModes-1]
-    return int(nModes+minModes), coeff, kbest[0], fluct
+        return n_modes, c, k[0], fluct
 
 
 

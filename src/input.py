@@ -1,10 +1,10 @@
-pdb = '6nj8'
+pdb = '6iat'
 pdbx = False
-n_modes = 210
+n_modes = 600
 model = 'anm'
 cbeta = False
 cutoff = 7.5
-eigmethod = 'lobcuda'
+eigmethod = 'lobpcg'
 
 mode = 'full'
 
@@ -14,5 +14,5 @@ T = 7
 cluster_method = 'discretize'
 scoreMethod = 'mean'
 cluster_start = 12
-cluster_stop = 62
+cluster_stop = 100
 cluster_step = 2

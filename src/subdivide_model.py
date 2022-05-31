@@ -157,11 +157,27 @@ def cluster_embedding(n_range, maps, calphas, method):
 
     best = np.argpartition(scores, -5)[-5:]  # indices of 4 best scores
     for ind in best:
-        writePDB('../results/subdivisions/' + pdb + '/' + pdb + '_' + str(n_range[ind]) + '_domains.pdb', calphas,
-                 beta=labels[ind],
-                 hybrid36=True)
+        saveSubdivisions(labels[ind], n_range[ind])
 
     return labels, scores, variances, numtypes, inerts
+
+def saveSubdivisions(labels, nsub):
+    from input import pdb
+    from make_model import getPDB
+    from prody import writePDB, saveAtoms
+    capsid, _, _ = getPDB(pdb)
+    capsid.setData('clust', 1)
+    nodes = capsid.getData('nodeid')
+    nmax = np.max(nodes)
+    for at in capsid.iterAtoms():
+        node = at.getData('nodeid')
+        at.setData('clust', labels[node % nmax])
+        at.setBeta(labels[node % nmax])
+    writePDB('../results/subdivisions/' + pdb + '/' + pdb + '_' + str(nsub) + '_domains.pdb', capsid,hybrid36=True)
+    saveAtoms(capsid, '../results/subdivisions/' + pdb + '/' + pdb + '_' + str(nsub) + '_domains_atoms')
+    return capsid
+
+
 
 def discreteInit(vectors, n_clusters, *, copy=False, max_svd_restarts=30, n_iter_max=20, random_state=None):
     from score import calcCentroids

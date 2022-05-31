@@ -29,7 +29,7 @@ def make_model(pdb, n_modes, mode):
         anm = ANM(pdb + '_full')
 
     if mode =='full':
-        hess, kirch = buildModel(pdb, calphas, cutoff)
+        hess, kirch = buildModel(pdb, capsid, cutoff)
     else:
         if model == 'gnm':
             kirch = loadKirch(pdb)
@@ -44,12 +44,6 @@ def make_model(pdb, n_modes, mode):
     else:
         evals, evecs = modeCalc(pdb, hess, kirch, n_modes, eigmethod, model)
 
-    # anm._n_atoms = n_atoms
-    # anm._vars = 1/evals
-    # print(anm.numAtoms())
-    # print(calphas.numAtoms())
-    # writeNMD('test.nmd', anm[:20], calphas)
-
 
 
     evPlot(evals, evecs)
@@ -59,7 +53,7 @@ def make_model(pdb, n_modes, mode):
 
     distFlucts = distanceFlucts(evals, evecs, kirch, n_modes)
     from score import stresses
-    rStress = stresses(hess, distFlucts)
+    # rStress = stresses(hess, distFlucts)
     sims = fluctToSims(distFlucts, pdb)
     saveAtoms(calphas, filename='../results/models/' + 'calphas_' + pdb)
 
@@ -73,11 +67,11 @@ def make_model(pdb, n_modes, mode):
 
 def getPDB(pdb):
     from input import pdbx
-    #os.chdir('../data/capsid_pdbs')
+    os.chdir('../data/capsid_pdbs')
     if pdbx:
-        filename = '../data/capsid_pdbs/' + pdb + '_full.cif'
+        filename = pdb + '_full.cif'
     else:
-        filename = '../data/capsid_pdbs/' + pdb + '_full.pdb'
+        filename = pdb + '_full.pdb'
     if not os.path.exists(filename):
         pdb_url = 'https://files.rcsb.org/download/' + pdb
         if pdbx:
@@ -94,15 +88,19 @@ def getPDB(pdb):
         capsid, header = parseMMCIF(filename, biomol=True, header=True)
         print(capsid.getTitle())
     else:
-        capsid, header = parsePDB(filename, header=True, biomol=True)
-
+        capsid, header = parsePDB(filename, header=True, biomol=True, secondary=True)
+        print(capsid)
+    if type(capsid) is list:
+        capsid = capsid[0]
     from input import cbeta
+    capsid = capsid.select('protein').copy()
+    capsid = addNodeID(capsid)
     if cbeta:
         calphas = capsid.select('protein and name CA CB').copy()
     else:
         calphas = capsid.select('protein and name CA').copy()
     print('Number Of Residues: ', calphas.getCoords().shape[0])
-    #os.chdir('../../src')
+    os.chdir('../../src')
 
     writePDB('../results/subdivisions/' + pdb + '_ca_prot.pdb', calphas,
              hybrid36=True)
@@ -110,15 +108,38 @@ def getPDB(pdb):
 
     return capsid, calphas, title
 
+def addNodeID(atoms):
+    atoms.setData('nodeid', 1)
+    atoms.setData('chainNum', 0)
+    i = 0
+    chid = 0
+    ch0 = atoms[0].getChid()
+    seg0 = atoms[0].getSegname()
+    for at in atoms.iterAtoms():
+        if at.getName()=='CA':
+            if at.getChid()==ch0 and at.getSegname()==seg0:
+                at.setData('chainNum', chid)
+            else:
+                chid += 1
+            ch0 = at.getChid()
+            seg0 = at.getSegname()
+
+            at.setData('nodeid', i)
+
+            i += 1
+        else:
+            at.setData('nodeid', i)
+
+    return atoms
 
 def gammaDist(dist2, *args):
     return 1/dist2
 
-def buildModel(pdb, calphas, cutoff=10.0):
+def buildModel(pdb, capsid, cutoff=10.0):
     from anm import buildENM
     from input import model
     anm = ANM(pdb + '_full')
-    kirch, hess = buildENM(calphas, calphas.getCoords(), cutoff, model=model)
+    kirch, hess = buildENM(capsid, cutoff, model=model)
     #anm.setHessian(hess)
     #anm._kirchhoff = kirch
     sparse.save_npz('../results/models/' + pdb + 'hess.npz', hess)
@@ -143,18 +164,27 @@ def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model):
     print('Calculating Normal Modes')
     start = time.time()
 
-
+    cuth_mkee = True
     if model=='anm':
         mat = hess
     else:
         mat = kirch
+
+    if cuth_mkee:
+        from scipy.sparse.csgraph import reverse_cuthill_mckee as rcm
+        perm = rcm(mat, symmetric_mode=True)
+        mat.indices = perm.take(mat.indices)
+        mat = mat.tocsc()
+        mat.indices = perm.take(mat.indices)
+        mat = mat.tocsr()
+        print(perm)
 
     n_dim = mat.shape[0]
     if eigmethod=='eigsh':
         evals, evecs = eigsh(mat, k=n_modes, sigma=1e-8, which='LA')
     elif eigmethod=='lobpcg':
         from scipy.sparse.linalg import lobpcg
-
+        print(mat.shape)
         epredict = np.random.rand(n_dim, n_modes+6)
         evals, evecs = lobpcg(mat, epredict, largest=False, tol=0, maxiter=n_dim)
         evals = evals[6:]
@@ -169,9 +199,12 @@ def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model):
         evals = cp.asnumpy(evals[6:])
         evecs = cp.asnumpy(evecs[:, 6:])
         print(evecs.shape)
+
+    if cuth_mkee:
+        evecs = evecs[perm, :].copy()
     print(evals)
     end = time.time()
-    print(end - start)
+    print('NMA time: ', end - start)
     print(evals[:6])
     np.savez('../results/models/' + pdb + model + 'modes.npz', evals=evals, evecs=evecs)
     return evals, evecs
@@ -244,10 +277,15 @@ def mechanicalProperties(bfactors, evals, evecs, coords, hess):
     from optcutoff import fluctFit
     from score import collectivity, meanCollect, effectiveSpringConstant, overlapStiffness, globalPressure
     _, calphas, title = getPDB(pdb)
-    names = calphas.getNames()
-    # ab = np.array([True if x == 'CA' else False for x in names])
-    # evecs = evecs[ab]
-    # bfactors = bfactors[ab]
+    from input import cbeta
+    # if cbeta:
+    #     names = calphas.getNames()
+    #
+    #     ab = np.array([True if x == 'CA' else False for x in names])
+    #     print(evecs.shape)
+    #     ev = np.reshape(evecs, (-1,3,evals.shape[0]))
+    #     evecs = ev[ab].reshape(evecs.shape)
+    #     bfactors = bfactors[ab]
     print(evecs.shape)
 
     print('Plotting')
@@ -263,7 +301,7 @@ def mechanicalProperties(bfactors, evals, evecs, coords, hess):
 
     print(nModes, coeff, gamma)
     from score import meanStiff
-    n_asym = int(evecs.shape[0]/60)
+    n_asym = int(bfactors.shape[0]/60)
     np.savez('../results/subdivisions/' + pdb + '_sqFlucts.npz', sqFlucts=sqFlucts, k=k, cc=coeff, nModes=nModes)
     ax.plot(np.arange(bfactors.shape[0])[:int(n_asym)], bfactors[:int(n_asym)], label='B-factors')
     ax.plot(np.arange(sqFlucts.shape[0])[:int(n_asym)], sqFlucts[:int(n_asym)], label='Squared Fluctuations')
