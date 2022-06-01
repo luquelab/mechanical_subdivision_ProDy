@@ -77,8 +77,6 @@ def embedding(n_evecs, sims):
     print(connected_components(sims))
     X_transformed, evals = spectral_embedding(sims, n_components=n_evecs, drop_first=False, eigen_solver = 'lobpcg', norm_laplacian=False)
     print('Memory Usage: ', psutil.virtual_memory().percent)
-    evPlot(np.ediff1d(evals), X_transformed)
-    evPlot(evals, X_transformed)
     return X_transformed
 
 def cluster_embedding(n_range, maps, calphas, method):

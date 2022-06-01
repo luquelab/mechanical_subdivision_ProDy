@@ -284,7 +284,7 @@ def mechanicalProperties(bfactors, evals, evecs, coords, hess):
     from optcutoff import fluctFit
     from score import collectivity, meanCollect, effectiveSpringConstant, overlapStiffness, globalPressure
     _, calphas, title = getPDB(pdb)
-    from settings import cbeta
+    # from settings import cbeta
     # if cbeta:
     #     names = calphas.getNames()
     #
@@ -304,7 +304,11 @@ def mechanicalProperties(bfactors, evals, evecs, coords, hess):
             'size': 11}
     matplotlib.rc('font', **font)
 
+
     gamma = (8 *np.pi**2)/k
+
+    if model=='anm':
+        gamma = gamma/3
 
     print(nModes, coeff, gamma)
     from score import meanStiff

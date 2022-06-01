@@ -56,9 +56,6 @@ def fluctFit(evals, evecs, bfactors):
         return n_modes, c, k[0], fluct
 
 
-
-
-
 # @nb.njit()
 def costFunc(evals, evecs, bfactors, n_modes):
     sqFlucts = fastFlucts(evals,evecs,n_modes)
