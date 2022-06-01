@@ -1,11 +1,12 @@
 import numba as nb
 import numpy as np
+from settings import *
 
-def buildENM(atoms, cutoff, model='gnm', gamma=1., **kwargs):
+def buildENM(atoms):
     from scipy import sparse
     import numpy as np
     from sklearn.neighbors import BallTree, radius_neighbors_graph
-    from input import cbeta
+    from settings import cbeta
 
     sel = 'protein and name CA'
     if cbeta:
@@ -21,18 +22,16 @@ def buildENM(atoms, cutoff, model='gnm', gamma=1., **kwargs):
     kirch = radius_neighbors_graph(tree, cutoff, mode='distance', n_jobs=-1)
     kc = kirch.tocoo().copy()
     kc.sum_duplicates()
-    kirch = kirchGamma(kc, calphas, d2=True, flexibilities=True, cbeta=cbeta, struct=False).tocsr()
+    kirch = kirchGamma(kc, calphas, d2=d2, flexibilities=flexibilities, cbeta=cbeta, struct=False).tocsr()
     dg = np.array(kirch.sum(axis=0))
     kirch.setdiag(-dg[0])
     kirch.sum_duplicates()
     print(kirch.data)
 
     if model=='anm':
-        fanm = 0.1
         kc = kirch.tocoo().copy()
         kc.sum_duplicates()
         hData = hessCalc(kc.row, kc.col, kirch.data, coords)
-
         indpt = kirch.indptr
         inds = kirch.indices
         hessian = sparse.bsr_matrix((hData, inds, indpt), shape=(dof,dof)).tocsr()

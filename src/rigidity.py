@@ -1,7 +1,7 @@
 def realFlucts(nc, labels):
     import numpy as np
     from make_model import getPDB
-    from input import pdb, model, n_modes
+    from settings import pdb, model, n_modes
     capsid, calphas, title = getPDB(pdb)
 
     modes = np.load('../results/models/' + pdb + model + 'modes' + '.npz')

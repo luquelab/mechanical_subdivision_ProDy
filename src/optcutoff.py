@@ -35,7 +35,7 @@ def fluctFit(evals, evecs, bfactors):
     coeffs = []
     ks = []
     flucts = []
-    from input import n_modes
+    from settings import n_modes
     minModes = int(0.1*n_modes)
     if fitmodes:
         for n_modes in range(len(evals)):

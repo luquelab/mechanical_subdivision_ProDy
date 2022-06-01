@@ -32,7 +32,7 @@ def calcCentroids(X, labels, n_clusters):
 #             centroids.append(cent)
 
 def median_score(coords, centroids):
-    from input import scoreMethod
+    from settings import scoreMethod
     from sklearn.metrics import pairwise_distances
 
     dists = pairwise_distances(coords,centroids, metric='cosine')

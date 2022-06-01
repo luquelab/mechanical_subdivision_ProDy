@@ -8,10 +8,9 @@ import time
 import numba as nb
 import numpy as np
 from scipy import sparse
+from settings import *
 
-
-def make_model(pdb, n_modes, mode):
-    from input import cutoff, eigmethod, model
+def make_model():
 
     capsid, calphas, title = getPDB(pdb)
     coords = calphas.getCoords()
@@ -58,15 +57,11 @@ def make_model(pdb, n_modes, mode):
     saveAtoms(calphas, filename='../results/models/' + 'calphas_' + pdb)
 
 
-    #from eigenCount import eigenCutoff
-
-    #n_modes = eigenCutoff(evals, 0.001)
-    #evals = evals[:n_modes]
-    return sims, calphas
+    # return -1
 
 
 def getPDB(pdb):
-    from input import pdbx
+    from settings import pdbx
     os.chdir('../data/capsid_pdbs')
     if pdbx:
         filename = pdb + '_full.cif'
@@ -92,7 +87,7 @@ def getPDB(pdb):
         print(capsid)
     if type(capsid) is list:
         capsid = capsid[0]
-    from input import cbeta
+    from settings import cbeta
     capsid = capsid.select('protein').copy()
     capsid = addNodeID(capsid)
     if cbeta:
@@ -137,9 +132,9 @@ def gammaDist(dist2, *args):
 
 def buildModel(pdb, capsid, cutoff=10.0):
     from anm import buildENM
-    from input import model
+    from settings import model
     anm = ANM(pdb + '_full')
-    kirch, hess = buildENM(capsid, cutoff, model=model)
+    kirch, hess = buildENM(capsid)
     #anm.setHessian(hess)
     #anm._kirchhoff = kirch
     sparse.save_npz('../results/models/' + pdb + 'hess.npz', hess)
@@ -164,7 +159,7 @@ def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model):
     print('Calculating Normal Modes')
     start = time.time()
 
-    cuth_mkee = True
+    cuth_mkee = False
     if model=='anm':
         mat = hess
     else:
@@ -211,7 +206,7 @@ def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model):
 
 
 def loadModes(pdb, n_modes):
-    from input import model
+    from settings import model
     if model=='anm':
         filename = '../results/models/' + pdb + model + 'modes.npz'
         if not os.path.exists(filename):
@@ -238,17 +233,30 @@ def loadModes(pdb, n_modes):
 def evPlot(evals, evecs):
     from prody import writeNMD
     import matplotlib.pyplot as plt
+    import matplotlib
+    fig, ax = plt.subplots(1, 1, figsize=(10, 5))
+    font = {'family': 'sans-serif',
+            'weight': 'normal',
+            'size': 11}
+    matplotlib.rc('font', **font)
     print('Plotting')
-    fig, ax = plt.subplots(1, 1, figsize=(16, 12))
-    ax.scatter(np.arange(evals.shape[0]), evals, marker='D', label='eigs')
-    #ax[1].plot(np.arange(evecs.shape[1]), evecs[0,:], label='1st Mode')
-    #ax[1].plot(np.arange(evecs.shape[1]), evecs[6, :], label='60th Mode')
+    ax.set_ylabel(r'$\omega^{2}$', fontsize=12)
+    ax.set_xlabel('Smallest Eigenvalues', fontsize=12)
+    ax.tick_params(axis='y', labelsize=8)
+    ax.tick_params(axis='x', labelsize=8)
+    ax.legend()
+    _, _, title = getPDB(pdb)
+    fig.suptitle(
+        'Eigenvalues/Squared Frequencies: ' + title.title() + ' (' + pdb + ')', fontsize=12)
+
+    ax.scatter(np.arange(evals.shape[0]), evals, marker='D', s=10, label='eigs')
     fig.tight_layout()
+    plt.savefig('../results/subdivisions/' + pdb + '_evals.png')
     plt.show()
 
 def icoEvPlot(evals, evecs, calphas):
     import matplotlib.pyplot as plt
-    from input import pdb
+    from settings import pdb
     uniques, inds, counts = np.unique(evals.round(decimals=6), return_index=True, return_counts=True)
     icoEvalInds = inds[counts==1]
     print(icoEvalInds)
@@ -266,18 +274,17 @@ def icoEvPlot(evals, evecs, calphas):
     ax.scatter(np.arange(icoEvals.shape[0]), icoEvals, marker='D', label='eigs')
     plt.show()
     from prody import sliceModel
-    anm_save, calphas_save = sliceModel(anm, calphas, calphas[:n_asym])
     writeNMD(pdb + '_ico.nmd', anm[icoEvalInds], calphas)
 
 
 def mechanicalProperties(bfactors, evals, evecs, coords, hess):
-    from input import pdb
+    from settings import pdb
     import matplotlib
     import matplotlib.pyplot as plt
     from optcutoff import fluctFit
     from score import collectivity, meanCollect, effectiveSpringConstant, overlapStiffness, globalPressure
     _, calphas, title = getPDB(pdb)
-    from input import cbeta
+    from settings import cbeta
     # if cbeta:
     #     names = calphas.getNames()
     #
@@ -321,7 +328,7 @@ def mechanicalProperties(bfactors, evals, evecs, coords, hess):
 
 def distanceFlucts(evals, evecs, kirch, n_modes):
     from scipy import sparse
-    from input import model
+    from settings import model
     n_modes = int(n_modes)
     n_atoms = kirch.shape[0]
     print(n_modes)
@@ -349,8 +356,23 @@ def distanceFlucts(evals, evecs, kirch, n_modes):
 def fluctPlot(d):
     import matplotlib.pyplot as plt
     print('Plotting Fluctuation Histogram')
-    fig, ax = plt.subplots(1, 1, figsize=(16, 6))
-    ax.hist(d.data, bins=50, histtype='stepfilled')
+    import matplotlib
+    fig, ax = plt.subplots(1, 1, figsize=(10, 5))
+    font = {'family': 'sans-serif',
+            'weight': 'normal',
+            'size': 11}
+    matplotlib.rc('font', **font)
+    print('Plotting')
+    ax.set_ylabel('Density', fontsize=12)
+    ax.set_xlabel('r$A^{2}$', fontsize=12)
+    ax.tick_params(axis='y', labelsize=8)
+    ax.tick_params(axis='x', labelsize=8)
+    ax.legend()
+    _, _, title = getPDB(pdb)
+    fig.suptitle(
+        'Histogram Of Pairwise Fluctuations: ' + title.title() + ' (' + pdb + ')', fontsize=12)
+
+    ax.hist(d.data, bins='fd', histtype='stepfilled', density=True)
     fig.tight_layout()
     plt.show()
 
@@ -371,11 +393,13 @@ def fluctToSims(d, pdb):
 
 @nb.njit(parallel=True)
 def cov(evals, evecs, i, j):
+    # Calculates the covariance between two residues in ANM. Takes the trace of block so no anisotropy info.
+    # Commented section would compute normalized covariances
     n_e = evals.shape[0]
-    n_d = evecs.shape[1]
+    #n_d = evecs.shape[1]
     tr1 = 0
-    tr2 = 0
-    tr3 = 0
+    #tr2 = 0
+    #tr3 = 0
     for n in nb.prange(n_e):
         l = evals[n]
         tr1 += 1 / l * (evecs[3 * i, n] * evecs[3 * j, n] + evecs[3 * i + 1, n] * evecs[3 * j + 1, n] + evecs[
@@ -387,42 +411,10 @@ def cov(evals, evecs, i, j):
     cov = tr1  # / np.sqrt(tr2 * tr3)
     return cov
 
-# def covDiags(evals, evecs):
-#     n_atoms = int(evecs.shape[0]/3)
-#     n_evals = evals.shape[0]
-#     covDiags = np.zeros((n,3,3))
-#     for i in range(n_evals):
-#         ev = evals[i]
-#         for j in range(n_atoms):
-#             vec = evecs[3*j:3*j+3]
-#             block = 1/ev * np.outer(vec,vec)
-#             covDiags[j] += block
-#     return covDiags
-
-def sphericalTransform(block, coord):
-    x = coord[0]
-    y = coord[1]
-    z = coord[2]
-    r = np.sqrt(x**2 + y**2 + z**2)
-    phi = np.arctan2(y,x)
-    theta = np.arccos(z,r)
-    j1 = np.cos(phi) * np.sin(theta)
-    j2 = -r*np.sin(phi) * np.sin(theta)
-    j3 = r*np.cos(phi) * np.cos(theta)
-    j4 = np.sin(phi) * np.sin(theta)
-    j5 = r*np.cos(phi) * np.sin(theta)
-    j6 = r*np.sin(phi) * np.cos(theta)
-    j7 = np.cos(theta)
-    j8 = 0
-    j9 = -r*np.cos(theta)
-    jac = np.array([[j1,j2,j3],[j4,j5,j6],[j7,j8,j9]])
-    sphereBlock = jac.T @ block @ jac
-    return sphereBlock
-
-
 
 @nb.njit(parallel=True)
 def gCov(evals, evecs, i, j):
+    # Calculates the covariance between two residues in GNM
     n_e = evals.shape[0]
     n_d = evecs.shape[1]
     cov = 0

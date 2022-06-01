@@ -8,66 +8,66 @@ import numpy as np
 import matplotlib.pyplot as plt
 import psutil
 from scipy import sparse
-from input import *
+from settings import *
 
 
-def subdivide_model(pdb, cluster_start, cluster_stop, cluster_step):
-    from input import mode
+def subdivide_model():
     print('Loading Model')
-    if mode=='kcluster':
-        sims = -1*sparse.load_npz('../results/models/' + pdb + 'kirch.npz')
-    else:
-        sims = sparse.load_npz('../results/models/' + pdb + 'sims.npz')
-    calphas = loadAtoms('../results/models/' + 'calphas_' + pdb + '.ag.npz')
 
+    sims = sparse.load_npz('../results/models/' + pdb + 'sims.npz')
+    calphas = loadAtoms('../results/models/' + 'calphas_' + pdb + '.ag.npz')
 
 
     if not os.path.exists('../results/subdivisions/' + pdb):
         os.mkdir('../results/subdivisions/' + pdb)
 
     print('Spectral Clustering')
-    from input import onlyTs, T
-    if onlyTs:
-        n_range = np.array([10*T+2, 20*T, 30*T, 30*T+2, 60*T])
-    else:
-        n_range = np.arange(cluster_start, cluster_stop+cluster_step, cluster_step)
+
+    n_range = np.arange(cluster_start, cluster_stop + cluster_step, cluster_step)
     n_evecs = max(n_range)
 
-    from input import prebuilt_embedding
-    if prebuilt_embedding and os.path.exists('../results/models/' + pdb + 'embedding.npy'):
+    if mode == 'clustering':
+        print('Plotting')
+        from score import plotScores
+        from score import clustFlucts
+        # clustFlucts(labels[n_best], pdb)
+        plotScores(pdb, n_range, save=True)
+
+        return -1
+
+    if mode=='embedding' and os.path.exists('../results/models/' + pdb + 'embedding.npy'):
         maps = np.load('../results/models/' + pdb + 'embedding.npy')
         if maps.shape[1] < cluster_stop:
-            print('Insufficient Eigenvectors For # Of Clusters')
-            quit()
+            print('Insufficient Eigenvectors For ' + str(cluster_stop) + ' Clusters, continuing with ' + str(maps.shape[1]) + 'as cluster_stop')
+            n_range = n_range[:maps.shape[1]].copy()
     else:
-        if prebuilt_embedding:
+        if mode=='embedding':
             print('No saved embedding found, rebuilding')
+        else:
+            print('Starting Spectral Embedding')
         start = time.time()
         maps = embedding(n_evecs, sims)
         end = time.time()
-        print(end - start, ' Seconds')
-        print(maps.shape)
+        print('Time Of Spectral Embedding: ', end - start, ' Seconds')
         from sklearn.preprocessing import normalize
         normalize(maps, copy=False)
         np.save('../results/models/' + pdb + 'embedding.npy', maps)
 
+    print('Starting Eigenvector Clustering')
     start = time.time()
-    from input import cluster_method as method
-    labels, scores, var, ntypes, inerts = cluster_embedding(n_range, maps, calphas, method)
+    labels, scores, var, ntypes, inerts = cluster_embedding(n_range, maps, calphas, cluster_method)
     end = time.time()
-    print(end - start, ' Seconds')
+    print('Time Of Clustering: ', end - start, ' Seconds')
 
     n_best = np.argmax(scores)
 
     print('Plotting')
     from score import plotScores
-
     from score import clustFlucts
-    import matplotlib.pyplot as plt
     clustFlucts(labels[n_best], pdb)
     plotScores(pdb, n_range, save=True)
 
-    return calphas, labels
+    #return -1
 
 def embedding(n_evecs, sims):
     from spectralStuff import spectral_embedding
@@ -162,7 +162,7 @@ def cluster_embedding(n_range, maps, calphas, method):
     return labels, scores, variances, numtypes, inerts
 
 def saveSubdivisions(labels, nsub):
-    from input import pdb
+    from settings import pdb
     from make_model import getPDB
     from prody import writePDB, saveAtoms
     capsid, _, _ = getPDB(pdb)
