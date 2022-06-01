@@ -131,7 +131,7 @@ def gammaDist(dist2, *args):
     return 1/dist2
 
 def buildModel(pdb, capsid, cutoff=10.0):
-    from anm import buildENM
+    from ENM import buildENM
     from settings import model
     anm = ANM(pdb + '_full')
     kirch, hess = buildENM(capsid)
@@ -281,7 +281,7 @@ def mechanicalProperties(bfactors, evals, evecs, coords, hess):
     from settings import pdb
     import matplotlib
     import matplotlib.pyplot as plt
-    from optcutoff import fluctFit
+    from bfactorFit import fluctFit
     from score import collectivity, meanCollect, effectiveSpringConstant, overlapStiffness, globalPressure
     _, calphas, title = getPDB(pdb)
     # from settings import cbeta
