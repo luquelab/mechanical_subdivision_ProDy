@@ -10,24 +10,24 @@ import numpy as np
 from scipy import sparse
 from settings import *
 
-def make_model():
 
+def make_model():
     capsid, calphas, title = getPDB(pdb)
     coords = calphas.getCoords()
     print(title)
     global anm, n_atoms, n_dim, n_asym
     n_atoms = calphas.getCoords().shape[0]
     print(n_atoms)
-    n_dim = 3*n_atoms
-    n_asym = int(n_atoms/60)
+    n_dim = 3 * n_atoms
+    n_asym = int(n_atoms / 60)
 
-    if model=='gnm':
+    if model == 'gnm':
         anm = GNM(pdb + '_full')
         n_dim = n_atoms
     else:
         anm = ANM(pdb + '_full')
 
-    if mode =='full':
+    if mode == 'full':
         hess, kirch = buildModel(pdb, capsid, cutoff)
     else:
         if model == 'gnm':
@@ -36,14 +36,10 @@ def make_model():
         else:
             hess, kirch = loadHess(pdb)
 
-
-
     if mode == 'eigs':
         evals, evecs, kirch = loadModes(pdb, n_modes)
     else:
         evals, evecs = modeCalc(pdb, hess, kirch, n_modes, eigmethod, model)
-
-
 
     evPlot(evals, evecs)
     # icoEvPlot(evals, evecs, calphas)
@@ -55,7 +51,6 @@ def make_model():
     # rStress = stresses(hess, distFlucts)
     sims = fluctToSims(distFlucts, pdb)
     saveAtoms(calphas, filename='../results/models/' + 'calphas_' + pdb)
-
 
     # return -1
 
@@ -103,6 +98,7 @@ def getPDB(pdb):
 
     return capsid, calphas, title
 
+
 def addNodeID(atoms):
     atoms.setData('nodeid', 1)
     atoms.setData('chainNum', 0)
@@ -111,8 +107,8 @@ def addNodeID(atoms):
     ch0 = atoms[0].getChid()
     seg0 = atoms[0].getSegname()
     for at in atoms.iterAtoms():
-        if at.getName()=='CA':
-            if at.getChid()==ch0 and at.getSegname()==seg0:
+        if at.getName() == 'CA':
+            if at.getChid() == ch0 and at.getSegname() == seg0:
                 at.setData('chainNum', chid)
             else:
                 chid += 1
@@ -127,16 +123,18 @@ def addNodeID(atoms):
 
     return atoms
 
+
 def gammaDist(dist2, *args):
-    return 1/dist2
+    return 1 / dist2
+
 
 def buildModel(pdb, capsid, cutoff=10.0):
     from ENM import buildENM
     from settings import model
     anm = ANM(pdb + '_full')
     kirch, hess = buildENM(capsid)
-    #anm.setHessian(hess)
-    #anm._kirchhoff = kirch
+    # anm.setHessian(hess)
+    # anm._kirchhoff = kirch
     sparse.save_npz('../results/models/' + pdb + 'hess.npz', hess)
     sparse.save_npz('../results/models/' + pdb + 'kirch.npz', kirch)
 
@@ -149,18 +147,19 @@ def loadHess(pdb):
     kirch = sparse.load_npz('../results/models/' + pdb + 'kirch.npz')
     return hess, kirch
 
+
 def loadKirch(pdb):
     kirch = sparse.load_npz('../results/models/' + pdb + 'kirch.npz')
     return kirch
 
 
 def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model):
-    #from input import model#, eigmethod
+    # from input import model#, eigmethod
     print('Calculating Normal Modes')
     start = time.time()
 
     cuth_mkee = False
-    if model=='anm':
+    if model == 'anm':
         mat = hess
     else:
         mat = kirch
@@ -175,21 +174,21 @@ def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model):
         print(perm)
 
     n_dim = mat.shape[0]
-    if eigmethod=='eigsh':
+    if eigmethod == 'eigsh':
         evals, evecs = eigsh(mat, k=n_modes, sigma=1e-8, which='LA')
-    elif eigmethod=='lobpcg':
+    elif eigmethod == 'lobpcg':
         from scipy.sparse.linalg import lobpcg
         print(mat.shape)
-        epredict = np.random.rand(n_dim, n_modes+6)
+        epredict = np.random.rand(n_dim, n_modes + 6)
         evals, evecs = lobpcg(mat, epredict, largest=False, tol=0, maxiter=n_dim)
         evals = evals[6:]
-        evecs = evecs[:,6:]
+        evecs = evecs[:, 6:]
         print(evecs.shape)
-    elif eigmethod=='lobcuda':
+    elif eigmethod == 'lobcuda':
         import cupy as cp
         from cupyx.scipy.sparse.linalg import lobpcg as clobpcg
         sparse_gpu = cp.sparse.csr_matrix(mat.astype(cp.float32))
-        epredict = cp.random.rand(n_dim, n_modes+6)
+        epredict = cp.random.rand(n_dim, n_modes + 6)
         evals, evecs = clobpcg(sparse_gpu, epredict, largest=False, tol=0, maxiter=n_dim)
         evals = cp.asnumpy(evals[6:])
         evecs = cp.asnumpy(evecs[:, 6:])
@@ -207,7 +206,7 @@ def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model):
 
 def loadModes(pdb, n_modes):
     from settings import model
-    if model=='anm':
+    if model == 'anm':
         filename = '../results/models/' + pdb + model + 'modes.npz'
         if not os.path.exists(filename):
             filename = '../results/models/' + pdb + 'modes.npz'
@@ -231,7 +230,7 @@ def loadModes(pdb, n_modes):
 
 
 def evPlot(evals, evecs):
-    from prody import writeNMD
+    # from prody import writeNMD
     import matplotlib.pyplot as plt
     import matplotlib
     fig, ax = plt.subplots(1, 1, figsize=(10, 5))
@@ -254,26 +253,26 @@ def evPlot(evals, evecs):
     plt.savefig('../results/subdivisions/' + pdb + '_evals.png')
     plt.show()
 
+
 def icoEvPlot(evals, evecs, calphas):
     import matplotlib.pyplot as plt
     from settings import pdb
     uniques, inds, counts = np.unique(evals.round(decimals=6), return_index=True, return_counts=True)
-    icoEvalInds = inds[counts==1]
+    icoEvalInds = inds[counts == 1]
     print(icoEvalInds)
     icoEvals = evals[icoEvalInds]
-    icoEvecs = evecs[:,icoEvalInds]
+    icoEvecs = evecs[:, icoEvalInds]
     anm._eigvals = evals
     anm._eigvecs = evecs
     anm._array = evecs
     anm._n_modes = evals.shape[0]
-    anm._vars = 1/evals
+    anm._vars = 1 / evals
     print(icoEvecs.shape)
     print(icoEvals)
     anm._n_atoms = calphas.getCoords().shape[0]
     fig, ax = plt.subplots(1, 1, figsize=(16, 12))
     ax.scatter(np.arange(icoEvals.shape[0]), icoEvals, marker='D', label='eigs')
     plt.show()
-    from prody import sliceModel
     writeNMD(pdb + '_ico.nmd', anm[icoEvalInds], calphas)
 
 
@@ -282,7 +281,7 @@ def mechanicalProperties(bfactors, evals, evecs, coords, hess):
     import matplotlib
     import matplotlib.pyplot as plt
     from bfactorFit import fluctFit
-    from score import collectivity, meanCollect, effectiveSpringConstant, overlapStiffness, globalPressure
+    # from score import collectivity, meanCollect, effectiveSpringConstant, overlapStiffness, globalPressure
     _, calphas, title = getPDB(pdb)
     # from settings import cbeta
     # if cbeta:
@@ -304,15 +303,13 @@ def mechanicalProperties(bfactors, evals, evecs, coords, hess):
             'size': 11}
     matplotlib.rc('font', **font)
 
+    gamma = (8 * np.pi ** 2) / k
 
-    gamma = (8 *np.pi**2)/k
-
-    if model=='anm':
-        gamma = gamma/3
+    if model == 'anm':
+        gamma = gamma / 3
 
     print(nModes, coeff, gamma)
-    from score import meanStiff
-    n_asym = int(bfactors.shape[0]/60)
+    n_asym = int(bfactors.shape[0] / 60)
     np.savez('../results/subdivisions/' + pdb + '_sqFlucts.npz', sqFlucts=sqFlucts, k=k, cc=coeff, nModes=nModes)
     ax.plot(np.arange(bfactors.shape[0])[:int(n_asym)], bfactors[:int(n_asym)], label='B-factors')
     ax.plot(np.arange(sqFlucts.shape[0])[:int(n_asym)], sqFlucts[:int(n_asym)], label='Squared Fluctuations')
@@ -322,7 +319,9 @@ def mechanicalProperties(bfactors, evals, evecs, coords, hess):
     ax.tick_params(axis='x', labelsize=8)
 
     ax.legend()
-    fig.suptitle('Squared Fluctuations vs B-factors: ' + title.title() + ' (' + pdb + ')' + "\n" + r' $\gamma = $' + "{:.5f}".format(gamma) + r' $k_{b}T/Å^{2}$' + '  CC = ' +"{:.5f}".format(coeff) ,fontsize=12)
+    fig.suptitle(
+        'Squared Fluctuations vs B-factors: ' + title.title() + ' (' + pdb + ')' + "\n" + r' $\gamma = $' + "{:.5f}".format(
+            gamma) + r' $k_{b}T/Å^{2}$' + '  CC = ' + "{:.5f}".format(coeff), fontsize=12)
     # fig.suptitle('# Modes: ' + str(nModes) + ' Corr. Coeff: ' + str(coeff) + ' Spring Constant: ' + str(gamma), fontsize=16)
     # fig.tight_layout()
     plt.savefig('../results/subdivisions/' + pdb + '_sqFlucts.svg')
@@ -340,7 +339,7 @@ def distanceFlucts(evals, evecs, kirch, n_modes):
     kirch = kirch.tocoo()
     covariance = sparse.lil_matrix((n_atoms, n_atoms))
     df = sparse.lil_matrix((n_atoms, n_atoms))
-    if model=='anm':
+    if model == 'anm':
         covariance = con_c(evals[:n_modes].copy(), evecs[:, :n_modes].copy(), covariance, kirch.row, kirch.col)
         covariance = covariance.tocsr()
     else:
@@ -395,15 +394,16 @@ def fluctToSims(d, pdb):
 
     return sims
 
+
 @nb.njit(parallel=True)
 def cov(evals, evecs, i, j):
     # Calculates the covariance between two residues in ANM. Takes the trace of block so no anisotropy info.
     # Commented section would compute normalized covariances
     n_e = evals.shape[0]
-    #n_d = evecs.shape[1]
+    # n_d = evecs.shape[1]
     tr1 = 0
-    #tr2 = 0
-    #tr3 = 0
+    # tr2 = 0
+    # tr3 = 0
     for n in nb.prange(n_e):
         l = evals[n]
         tr1 += 1 / l * (evecs[3 * i, n] * evecs[3 * j, n] + evecs[3 * i + 1, n] * evecs[3 * j + 1, n] + evecs[
@@ -427,13 +427,13 @@ def gCov(evals, evecs, i, j):
         cov += 1 / l * (evecs[i, n] * evecs[j, n])
     return cov
 
-#@nb.njit()
+
+# @nb.njit()
 def gCon_c(evals, evecs, c, row, col):
     for k in range(row.shape[0]):
         i, j = (row[k], col[k])
         c[i, j] = gCov(evals, evecs, i, j)
     return c
-
 
 
 def con_c(evals, evecs, c, row, col):
@@ -446,9 +446,10 @@ def con_c(evals, evecs, c, row, col):
         c[i, j] = cov(evals, evecs, i, j)
     return c
 
-#@nb.njit()
+
+# @nb.njit()
 def con_d(c, d, row, col):
     for k in range(row.shape[0]):
         i, j = (row[k], col[k])
-        d[i, j] = np.abs(c[i,i] + c[j,j] - 2 * c[i, j])
+        d[i, j] = np.abs(c[i, i] + c[j, j] - 2 * c[i, j])
     return d
