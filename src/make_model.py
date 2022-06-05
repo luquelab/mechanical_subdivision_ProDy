@@ -295,7 +295,7 @@ def mechanicalProperties(bfactors, evals, evecs, coords, hess):
     print(evecs.shape)
 
     print('Plotting')
-    nModes, coeff, k, sqFlucts = fluctFit(evals, evecs, bfactors)
+    nModes, coeff, k, sqFlucts, stderr = fluctFit(evals, evecs, bfactors)
 
     fig, ax = plt.subplots(1, 1, figsize=(10, 5))
     font = {'family': 'sans-serif',
@@ -304,12 +304,15 @@ def mechanicalProperties(bfactors, evals, evecs, coords, hess):
     matplotlib.rc('font', **font)
 
     gamma = (8 * np.pi ** 2) / k
+    stderr =  stderr/k
+    stderr = gamma*stderr
 
     if model == 'anm':
         gamma = gamma / 3
+        stderr = stderr/3
 
     print(nModes, coeff, gamma)
-    n_asym = int(bfactors.shape[0] / 60)
+    n_asym = int(bfactors.shape[0]/60)
     np.savez('../results/subdivisions/' + pdb + '_sqFlucts.npz', sqFlucts=sqFlucts, k=k, cc=coeff, nModes=nModes)
     ax.plot(np.arange(bfactors.shape[0])[:int(n_asym)], bfactors[:int(n_asym)], label='B-factors')
     ax.plot(np.arange(sqFlucts.shape[0])[:int(n_asym)], sqFlucts[:int(n_asym)], label='Squared Fluctuations')
@@ -321,10 +324,11 @@ def mechanicalProperties(bfactors, evals, evecs, coords, hess):
     ax.legend()
     fig.suptitle(
         'Squared Fluctuations vs B-factors: ' + title.title() + ' (' + pdb + ')' + "\n" + r' $\gamma = $' + "{:.5f}".format(
-            gamma) + r' $k_{b}T/Å^{2}$' + '  CC = ' + "{:.5f}".format(coeff), fontsize=12)
+            gamma) +  r'$\pm$' + "{:.5f}".format(stderr) + r' $k_{b}T/Å^{2}$' + '  CC = ' + "{:.5f}".format(coeff), fontsize=12)
     # fig.suptitle('# Modes: ' + str(nModes) + ' Corr. Coeff: ' + str(coeff) + ' Spring Constant: ' + str(gamma), fontsize=16)
     # fig.tight_layout()
     plt.savefig('../results/subdivisions/' + pdb + '_sqFlucts.svg')
+    plt.savefig('../results/subdivisions/' + pdb + '_sqFlucts.png')
     plt.show()
     return nModes, gamma
 

@@ -20,11 +20,6 @@ def springFit(bfactors, sqFlucts):
     a = huber.coef_
     return a
 
-def springFit2(bfactors, sqFlucts):
-    from scipy.optimize import minimize_scalar
-    res = minimize_scalar(lambda k: l1Cost(bfactors, sqFlucts, k))
-    return res.x
-
 
 @nb.njit()
 def l1Cost(bfactors, sqFlucts, a):
@@ -49,11 +44,13 @@ def fluctFit(evals, evecs, bfactors):
         coeff = np.max(coeffs)
         kbest = ks[nModes-1]
         fluct = flucts[nModes-1]
-        return int(nModes+minModes), coeff, kbest[0], fluct
+        err = standardError(bfactors, fluct, kbest)
+        return int(nModes+minModes), coeff, kbest[0], fluct, err
     else:
         n_modes = evals.shape[0]
         c, k, fluct = costFunc(evals, evecs, bfactors, n_modes)
-        return n_modes, c, k[0], fluct
+        err = standardError(bfactors, fluct, k)
+        return n_modes, c, k[0], fluct, err
 
 
 # @nb.njit()
@@ -66,3 +63,9 @@ def costFunc(evals, evecs, bfactors, n_modes):
     scaledFlucts = k*sqFlucts
     c = np.corrcoef(bfactors,scaledFlucts)[1,0]
     return c, k, scaledFlucts
+
+def standardError(bfactors, sqFlucts, k):
+    n = bfactors.shape[0]
+    y = sqFlucts*k
+    err = np.sqrt(1/(n-1) * np.sum((bfactors-y)**2)/(np.sum(bfactors**2)))
+    return err

@@ -64,7 +64,7 @@ def subdivide_model():
     print('Plotting')
     from score import plotScores
     from score import clustFlucts
-    clustFlucts(labels[n_best], pdb)
+    # clustFlucts(labels[n_best], pdb)
     plotScores(pdb, n_range, save=True)
 
     #return -1
@@ -138,8 +138,7 @@ def cluster_embedding(n_range, maps, calphas, method):
         print('Scoring')
         from rigidity import realFlucts
         testScore = median_score(emb, centroids)
-        #rigidities, _, _ = realFlucts(n_clusters, label)
-        #inert = np.sum(rigidities)
+
 
         scores.append(testScore)
         var, ntypes = cluster_types(label)
@@ -153,24 +152,31 @@ def cluster_embedding(n_range, maps, calphas, method):
         np.savez('../results/subdivisions/' + pdb + '/' + pdb + '_' + nc + '_results', labels=label, score=testScore,
                  var=var, ntypes=ntypes, n=n, method=cluster_method, inertia=inert)
 
-    best = np.argpartition(scores, -5)[-5:]  # indices of 4 best scores
+    best = np.argpartition(scores, -3)[-3:]  # indices of 3 best scores
     for ind in best:
-        saveSubdivisions(labels[ind], n_range[ind])
+        rigidities, fullRigidities, mobilities = realFlucts(n_range[ind], labels[ind])
+        saveSubdivisions(labels[ind], n_range[ind], rigidities, fullRigidities, mobilities)
 
     return labels, scores, variances, numtypes, inerts
 
-def saveSubdivisions(labels, nsub):
+def saveSubdivisions(labels, nsub, rigidities, fullRigidities, mobilities):
     from settings import pdb
     from make_model import getPDB
     from prody import writePDB, saveAtoms
     capsid, _, _ = getPDB(pdb)
-    capsid.setData('clust', 1)
+    capsid.setData('clust', -1)
+    capsid.setData('clustrigid', -1)
+    capsid.setData('clustrigidfull', -1)
+    capsid.setData('clustmobilities', -1)
     nodes = capsid.getData('nodeid')
     nmax = np.max(nodes)
     for at in capsid.iterAtoms():
         node = at.getData('nodeid')
         at.setData('clust', labels[node % nmax])
-        at.setBeta(labels[node % nmax])
+        at.setData('clustrigid', rigidities[node % nmax])
+        at.setData('clustrigidfull', fullRigidities[node % nmax])
+        at.setData('clustmobilities', mobilities[node % nmax])
+        at.setBeta(fullRigidities[node % nmax])
     writePDB('../results/subdivisions/' + pdb + '/' + pdb + '_' + str(nsub) + '_domains.pdb', capsid,hybrid36=True)
     saveAtoms(capsid, '../results/subdivisions/' + pdb + '/' + pdb + '_' + str(nsub) + '_domains_atoms')
     return capsid

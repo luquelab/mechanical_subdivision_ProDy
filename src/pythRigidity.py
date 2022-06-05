@@ -1,9 +1,8 @@
 import numpy as np
 
-#pythran export pairDists(float[:], float[:], float)
-def pairDists(evi, evj, sq):
-    cij = np.sum(evi*evj)
-    d = sq - 2*cij
+#pythran export pairDists(float[:], float[:])
+def pairDists(evi, evj):
+    d = np.sum((evi-evj)**2)
     return d
 
 
@@ -13,13 +12,11 @@ def clusterFlucts(evecs, cFlucts):
     c_size = evecs.shape[0]
     flucts = np.zeros(c_size)
     for i in range(c_size):
-        evi = evecs[i, :]
+        evi = evecs[i,:]
         for j in range(c_size):
-            if i==j:
-                continue
             evj = evecs[j,:]
-            sq = cFlucts[i] + cFlucts[j]
-            flucts[i] += np.sqrt(pairDists(evi.flatten(), evj.flatten(), sq))
+            flucts[i] += pairDists(evi, evj)
+
     return flucts/(2*c_size)
 
 #pythran export fastFlucts(float[:,:], str)
