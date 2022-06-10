@@ -305,11 +305,13 @@ def mechanicalProperties(bfactors, evals, evecs, coords, hess):
 
     gamma = (8 * np.pi ** 2) / k
     stderr =  stderr/k
-    stderr = gamma*stderr
 
     if model == 'anm':
         gamma = gamma / 3
-        stderr = stderr/3
+
+    stderr = gamma * stderr
+    from bfactorFit import confidenceInterval
+    ci = confidenceInterval(bfactors, stderr)
 
     print(nModes, coeff, gamma)
     n_asym = int(bfactors.shape[0]/60)
@@ -324,7 +326,7 @@ def mechanicalProperties(bfactors, evals, evecs, coords, hess):
     ax.legend()
     fig.suptitle(
         'Squared Fluctuations vs B-factors: ' + title.title() + ' (' + pdb + ')' + "\n" + r' $\gamma = $' + "{:.5f}".format(
-            gamma) +  r'$\pm$' + "{:.5f}".format(stderr) + r' $k_{b}T/Å^{2}$' + '  CC = ' + "{:.5f}".format(coeff), fontsize=12)
+            gamma) +  r'$\pm$' + "{:.5f}".format(ci) + r' $k_{b}T/Å^{2}$' + '  CC = ' + "{:.5f}".format(coeff), fontsize=12)
     # fig.suptitle('# Modes: ' + str(nModes) + ' Corr. Coeff: ' + str(coeff) + ' Spring Constant: ' + str(gamma), fontsize=16)
     # fig.tight_layout()
     plt.savefig('../results/subdivisions/' + pdb + '_sqFlucts.svg')

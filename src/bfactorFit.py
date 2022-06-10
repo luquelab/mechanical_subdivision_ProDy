@@ -16,7 +16,7 @@ def springFit(bfactors, sqFlucts):
     from sklearn.linear_model import HuberRegressor
     #a, _, _, _ = np.linalg.lstsq(sqFlucts, bfactors)
     #a = springFit2(bfactors, sqFlucts)
-    huber = HuberRegressor(fit_intercept=False).fit(sqFlucts, bfactors)
+    huber = HuberRegressor(fit_intercept=False, tol=0).fit(sqFlucts, bfactors)
     a = huber.coef_
     return a
 
@@ -45,11 +45,13 @@ def fluctFit(evals, evecs, bfactors):
         kbest = ks[nModes-1]
         fluct = flucts[nModes-1]
         err = standardError(bfactors, fluct, kbest)
+        #err = confidenceInterval(bfactors, err)
         return int(nModes+minModes), coeff, kbest[0], fluct, err
     else:
         n_modes = evals.shape[0]
         c, k, fluct = costFunc(evals, evecs, bfactors, n_modes)
         err = standardError(bfactors, fluct, k)
+        #err = confidenceInterval(bfactors, err)
         return n_modes, c, k[0], fluct, err
 
 
@@ -67,5 +69,13 @@ def costFunc(evals, evecs, bfactors, n_modes):
 def standardError(bfactors, sqFlucts, k):
     n = bfactors.shape[0]
     y = sqFlucts*k
-    err = np.sqrt(1/(n-1) * np.sum((bfactors-y)**2)/(np.sum(bfactors**2)))
+    err = np.sqrt(1/(n-2) * np.sum((bfactors-y)**2)/(np.sum((bfactors - np.mean(bfactors))**2)))
     return err
+
+def confidenceInterval(bfactors, stderr):
+    from scipy.stats import t
+    alpha = 1-0.95
+    df = bfactors.shape[0]
+    score = abs(t.ppf(alpha / 2, df-2))
+    #score = 1.65
+    return score*stderr#*np.sqrt(df)
