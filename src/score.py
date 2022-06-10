@@ -124,6 +124,7 @@ def plotScores(pdb, n_range, save=False):
     print(pdb + '_' + nc + '_domains.png')
     if save:
         plt.savefig('../results/subdivisions/' + pdb + '_' + nc + '_domains.svg')
+        plt.savefig('../results/subdivisions/' + pdb + '_' + nc + '_domains.png')
     plt.show()
 
 def clustFlucts(labels, pdb):
