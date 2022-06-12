@@ -131,13 +131,15 @@ def gammaDist(dist2, *args):
 def buildModel(pdb, capsid, cutoff=10.0):
     from ENM import buildENM
     from settings import model
+    start = time.time()
     anm = ANM(pdb + '_full')
     kirch, hess = buildENM(capsid)
     # anm.setHessian(hess)
     # anm._kirchhoff = kirch
     sparse.save_npz('../results/models/' + pdb + 'hess.npz', hess)
     sparse.save_npz('../results/models/' + pdb + 'kirch.npz', kirch)
-
+    end = time.time()
+    print('Hessian time: ', end - start)
     return hess, kirch
 
 
