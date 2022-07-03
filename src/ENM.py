@@ -14,15 +14,27 @@ def buildENM(atoms):
     calphas = atoms.select(sel)
     coords = calphas.getCoords()
     n_atoms = coords.shape[0]
+    n_asym = int(n_atoms/60)
+    _, masses = buildMassesCoords(atoms)
+    masses = masses[:n_asym]
+    masses = np.tile(masses, 60)
+    #masses = masses/np.mean(masses)
+    print(masses)
+    print('n_masses', masses.shape)
+
     print('# Atoms ',n_atoms)
     dof = n_atoms * 3
-
 
     tree = BallTree(coords)
     kirch = radius_neighbors_graph(tree, cutoff, mode='distance', n_jobs=-1)
     kc = kirch.tocoo().copy()
     kc.sum_duplicates()
     kirch = kirchGamma(kc, calphas, d2=d2, flexibilities=flexibilities, cbeta=cbeta, struct=False).tocsr()
+    useMass = False
+    if useMass:
+        msqinv = 1/np.sqrt(masses)
+        mDiag = sparse.diags(msqinv)
+        kirch = mDiag @ kirch @ mDiag
     dg = np.array(kirch.sum(axis=0))
     kirch.setdiag(-dg[0])
     kirch.sum_duplicates()
@@ -39,9 +51,27 @@ def buildENM(atoms):
     else:
         hessian = kirch.copy()
     print('done constructing matrix')
-    return kirch, hessian
+    return kirch, hessian, masses
 
 
+def buildMassesCoords(atoms):
+    print(atoms[0])
+    coords = []
+    masses = []
+    print('segments:', atoms.numSegments())
+    for seg in atoms.iterSegments():
+        for chain in seg.iterChains():
+            for res in chain.iterResidues():
+                mass = np.sum(res.getMasses())
+                masses.append(mass)
+                # if res.getResname() == 'GLY':
+                #     coord = np.mean(res.getCoords())
+                # else:
+                #     coord = res['CA'].getCoords()
+                coord = res['CA'].getCoords()
+                coords.append(coord)
+
+    return np.asarray(coords), np.asarray(masses)
 
 def kirchGamma(kirch, atoms, **kwargs):
     kg = kirch.copy()
@@ -73,6 +103,16 @@ def kirchGamma(kirch, atoms, **kwargs):
         kg.data = kg.data * abg
     return kg
 
+@nb.njit()
+def backboneKirch(chids, asymids, resids):
+
+    for i in range(len(chids)):
+        for j in range(len(chids)):
+            sij = np.abs(resids[i] - resids[j])
+            if sij == 1 and chids[i] == chids[j] and asymids[i] == asymids[j]:
+
+            elif sij <= 3 and chids[i] == chids[j] and asymids[i] == asymids[j]:
+                return -1
 
 @nb.njit()
 def cooOperation(row, col, data, func, arg):
@@ -99,10 +139,12 @@ def flexFunc(i,j,d, fl):
     return np.sqrt(fl[i]*fl[j])
 
 @nb.njit()
-def structFunc(i,j,d, chainNum):
+def structFunc(i,j,d, chids, asymids):
     sij = np.abs(i-j)
-    if sij <= 3 and chainNum[i]==chainNum[j]:
-        return -100/(sij)**2
+    if sij == 1 and chids[i]==chids[j] and asymids[i]==asymids[j]:
+        return -100
+    elif sij <= 3 and chids[i]==chids[j] and asymids[i]==asymids[j]:
+        return -1
     else:
         return -1/(d)**2
 

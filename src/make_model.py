@@ -28,7 +28,7 @@ def make_model():
         anm = ANM(pdb + '_full')
 
     if mode == 'full':
-        hess, kirch = buildModel(pdb, capsid, cutoff)
+        hess, kirch, masses = buildModel(pdb, capsid, cutoff)
     else:
         if model == 'gnm':
             kirch = loadKirch(pdb)
@@ -39,7 +39,7 @@ def make_model():
     if mode == 'eigs':
         evals, evecs, kirch = loadModes(pdb, n_modes)
     else:
-        evals, evecs = modeCalc(pdb, hess, kirch, n_modes, eigmethod, model)
+        evals, evecs = modeCalc(pdb, hess, kirch, n_modes, eigmethod, model, masses)
 
     evPlot(evals, evecs)
     # icoEvPlot(evals, evecs, calphas)
@@ -78,7 +78,7 @@ def getPDB(pdb):
         capsid, header = parseMMCIF(filename, biomol=True, header=True)
         print(capsid.getTitle())
     else:
-        capsid, header = parsePDB(filename, header=True, biomol=True, secondary=True)
+        capsid, header = parsePDB(filename, header=True, biomol=True, secondary=True, extend_biomol=True)
         print(capsid)
     if type(capsid) is list:
         capsid = capsid[0]
@@ -133,14 +133,14 @@ def buildModel(pdb, capsid, cutoff=10.0):
     from settings import model
     start = time.time()
     anm = ANM(pdb + '_full')
-    kirch, hess = buildENM(capsid)
+    kirch, hess, masses = buildENM(capsid)
     # anm.setHessian(hess)
     # anm._kirchhoff = kirch
     sparse.save_npz('../results/models/' + pdb + 'hess.npz', hess)
     sparse.save_npz('../results/models/' + pdb + 'kirch.npz', kirch)
     end = time.time()
     print('Hessian time: ', end - start)
-    return hess, kirch
+    return hess, kirch, masses
 
 
 def loadHess(pdb):
@@ -155,7 +155,7 @@ def loadKirch(pdb):
     return kirch
 
 
-def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model):
+def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model, masses):
     # from input import model#, eigmethod
     print('Calculating Normal Modes')
     start = time.time()
@@ -163,6 +163,7 @@ def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model):
     cuth_mkee = False
     if model == 'anm':
         mat = hess
+        masses = np.repeat(masses, 3)
     else:
         mat = kirch
 
@@ -174,10 +175,14 @@ def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model):
         mat.indices = perm.take(mat.indices)
         mat = mat.tocsr()
         print(perm)
-
+    useMass = True
     n_dim = mat.shape[0]
     if eigmethod == 'eigsh':
-        evals, evecs = eigsh(mat, k=n_modes, sigma=1e-8, which='LA')
+        if useMass:
+            M = sparse.diags(masses)
+        else:
+            M = sparse.identity(n_dim)
+        evals, evecs = eigsh(mat, M=M, k=n_modes, sigma=1e-8, which='LA')
     elif eigmethod == 'lobpcg':
         from scipy.sparse.linalg import lobpcg
         print(mat.shape)
@@ -191,13 +196,19 @@ def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model):
         from cupyx.scipy.sparse.linalg import lobpcg as clobpcg
         sparse_gpu = cp.sparse.csr_matrix(mat.astype(cp.float32))
         epredict = cp.random.rand(n_dim, n_modes + 6)
-        evals, evecs = clobpcg(sparse_gpu, epredict, largest=False, tol=0, maxiter=n_dim)
+        if useMass:
+            M = cp.sparse.diags(masses)
+        else:
+            M = cp.sparse.identity(n_dim)
+        evals, evecs = clobpcg(sparse_gpu, epredict, B=M, largest=False, tol=0, maxiter=n_dim)
         evals = cp.asnumpy(evals[6:])
         evecs = cp.asnumpy(evecs[:, 6:])
         print(evecs.shape)
-
     if cuth_mkee:
         evecs = evecs[perm, :].copy()
+    useMass=False
+    if useMass:
+        evecs = evecs*np.sqrt(masses)[:,None]
     print(evals)
     end = time.time()
     print('NMA time: ', end - start)
