@@ -180,12 +180,10 @@ def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model):
         evals, evecs = eigsh(mat, k=n_modes, sigma=1e-8, which='LA')
     elif eigmethod == 'lobpcg':
         from scipy.sparse.linalg import lobpcg
-        print(mat.shape)
         epredict = np.random.rand(n_dim, n_modes + 6)
         evals, evecs = lobpcg(mat, epredict, largest=False, tol=0, maxiter=n_dim)
         evals = evals[6:]
         evecs = evecs[:, 6:]
-        print(evecs.shape)
     elif eigmethod == 'lobcuda':
         import cupy as cp
         from cupyx.scipy.sparse.linalg import lobpcg as clobpcg
@@ -198,10 +196,8 @@ def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model):
 
     if cuth_mkee:
         evecs = evecs[perm, :].copy()
-    print(evals)
     end = time.time()
     print('NMA time: ', end - start)
-    print(evals[:6])
     np.savez('../results/models/' + pdb + model + 'modes.npz', evals=evals, evecs=evecs)
     return evals, evecs
 
