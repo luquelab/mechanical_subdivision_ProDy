@@ -11,24 +11,20 @@ from scipy import sparse
 from settings import *
 
 
-def make_model():
-    capsid, calphas, title = getPDB(pdb)
-    coords = calphas.getCoords()
-    print(title)
-    global anm, n_atoms, n_dim, n_asym
-    n_atoms = calphas.getCoords().shape[0]
-    print(n_atoms)
-    n_dim = 3 * n_atoms
-    n_asym = int(n_atoms / 60)
+def make_model(pdbx):
 
-    if model == 'gnm':
-        anm = GNM(pdb + '_full')
-        n_dim = n_atoms
+    if pdbx:
+        capsid, calphas, coords, bfactors, title = getPDBx(pdb)
     else:
-        anm = ANM(pdb + '_full')
+        capsid, calphas, title = getPDB(pdb)
+        coords = calphas.getCoords()
+        bfactors = calphas.getBetas()
+
+    print(title)
+    print('# Of Residues: ', coords.shape)
 
     if mode == 'full':
-        hess, kirch, masses = buildModel(pdb, capsid, cutoff)
+        hess, kirch = buildModel(pdb, calphas, coords, bfactors, cutoff)
     else:
         if model == 'gnm':
             kirch = loadKirch(pdb)
@@ -39,18 +35,13 @@ def make_model():
     if mode == 'eigs':
         evals, evecs, kirch = loadModes(pdb, n_modes)
     else:
-        evals, evecs = modeCalc(pdb, hess, kirch, n_modes, eigmethod, model, masses)
+        evals, evecs = modeCalc(pdb, hess, kirch, n_modes, eigmethod, model)
 
-    evPlot(evals, evecs)
-    # icoEvPlot(evals, evecs, calphas)
-    bfactors = calphas.getBetas()
-    nm, gamma = mechanicalProperties(bfactors, evals, evecs, coords, hess)
+    evPlot(evals, evecs, title)
+    nm, gamma = mechanicalProperties(bfactors, evals, evecs, title)
 
-    distFlucts = distanceFlucts(evals, evecs, kirch, n_modes)
-    from score import stresses
-    # rStress = stresses(hess, distFlucts)
+    distFlucts = distanceFlucts(evals, evecs, kirch, n_modes, title)
     sims = fluctToSims(distFlucts, pdb)
-    saveAtoms(calphas, filename='../results/models/' + 'calphas_' + pdb)
 
     # return -1
 
@@ -88,7 +79,7 @@ def getPDB(pdb):
     if cbeta:
         calphas = capsid.select('protein and name CA CB').copy()
     else:
-        calphas = capsid.select('protein and name CA').copy()
+        calphas = capsid.select('protein and name CA')
     print('Number Of Residues: ', calphas.getCoords().shape[0])
     os.chdir('../../src')
 
@@ -97,6 +88,22 @@ def getPDB(pdb):
     title = header['title']
 
     return capsid, calphas, title
+
+def getPDBx(pdb):
+    import biotite.database.rcsb as rcsb
+    import biotite.structure as struc
+    import biotite.structure.io.pdbx as pdbx
+    import biotite.structure.io as strucio
+    file_name = rcsb.fetch(pdb, "pdbx", target_path="../data/capsid_pdbs")
+    pdbx_file = pdbx.PDBxFile()
+    pdbx_file.read(file_name)
+    capsid = pdbx.get_assembly(pdbx_file, assembly_id="1", model=1, extra_fields=['b_factor'])
+    title = pdbx_file.get_category('pdbx_database_related')['details']
+    print(title)
+    print("Number of protein chains:", struc.get_chain_count(capsid))
+    calphas = capsid[capsid.atom_name == 'CA']
+    coords = calphas.coord
+    return capsid, calphas, coords, calphas.b_factor, title
 
 
 def addNodeID(atoms):
@@ -123,24 +130,17 @@ def addNodeID(atoms):
 
     return atoms
 
-
-def gammaDist(dist2, *args):
-    return 1 / dist2
-
-
-def buildModel(pdb, capsid, cutoff=10.0):
+def buildModel(pdb, calphas, coords, bfactors, cutoff=10.0):
     from ENM import buildENM
-    from settings import model
     start = time.time()
-    anm = ANM(pdb + '_full')
-    kirch, hess, masses = buildENM(capsid)
+    kirch, hess = buildENM(calphas, coords, bfactors)
     # anm.setHessian(hess)
     # anm._kirchhoff = kirch
     sparse.save_npz('../results/models/' + pdb + 'hess.npz', hess)
     sparse.save_npz('../results/models/' + pdb + 'kirch.npz', kirch)
     end = time.time()
     print('Hessian time: ', end - start)
-    return hess, kirch, masses
+    return hess, kirch
 
 
 def loadHess(pdb):
@@ -155,7 +155,7 @@ def loadKirch(pdb):
     return kirch
 
 
-def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model, masses):
+def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model):
     # from input import model#, eigmethod
     print('Calculating Normal Modes')
     start = time.time()
@@ -163,7 +163,6 @@ def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model, masses):
     cuth_mkee = False
     if model == 'anm':
         mat = hess
-        masses = np.repeat(masses, 3)
     else:
         mat = kirch
 
@@ -175,13 +174,10 @@ def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model, masses):
         mat.indices = perm.take(mat.indices)
         mat = mat.tocsr()
         print(perm)
-    useMass = True
+    useMass = False
     n_dim = mat.shape[0]
     if eigmethod == 'eigsh':
-        if useMass:
-            M = sparse.diags(masses)
-        else:
-            M = sparse.identity(n_dim)
+        M = sparse.identity(n_dim)
         evals, evecs = eigsh(mat, M=M, k=n_modes, sigma=1e-8, which='LA')
     elif eigmethod == 'lobpcg':
         from scipy.sparse.linalg import lobpcg
@@ -195,20 +191,16 @@ def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model, masses):
         import cupy as cp
         from cupyx.scipy.sparse.linalg import lobpcg as clobpcg
         sparse_gpu = cp.sparse.csr_matrix(mat.astype(cp.float32))
-        epredict = cp.random.rand(n_dim, n_modes + 6)
-        if useMass:
-            M = cp.sparse.diags(masses)
-        else:
-            M = cp.sparse.identity(n_dim)
-        evals, evecs = clobpcg(sparse_gpu, epredict, B=M, largest=False, tol=0, maxiter=n_dim)
+        epredict = cp.random.rand(n_dim, n_modes + 6, dtype = np.float32)
+        print(sparse_gpu, epredict)
+        M = cp.sparse.identity(n_dim)
+        evals, evecs = clobpcg(sparse_gpu, epredict, largest=False, tol=0)
         evals = cp.asnumpy(evals[6:])
         evecs = cp.asnumpy(evecs[:, 6:])
         print(evecs.shape)
     if cuth_mkee:
         evecs = evecs[perm, :].copy()
     useMass=False
-    if useMass:
-        evecs = evecs*np.sqrt(masses)[:,None]
     print(evals)
     end = time.time()
     print('NMA time: ', end - start)
@@ -242,7 +234,7 @@ def loadModes(pdb, n_modes):
     return evals, evecs, kirch
 
 
-def evPlot(evals, evecs):
+def evPlot(evals, evecs, title):
     # from prody import writeNMD
     import matplotlib.pyplot as plt
     import matplotlib
@@ -257,7 +249,6 @@ def evPlot(evals, evecs):
     ax.tick_params(axis='y', labelsize=8)
     ax.tick_params(axis='x', labelsize=8)
     ax.legend()
-    _, _, title = getPDB(pdb)
     fig.suptitle(
         'Eigenvalues/Squared Frequencies: ' + title.title() + ' (' + pdb + ')', fontsize=12)
 
@@ -267,14 +258,15 @@ def evPlot(evals, evecs):
     plt.show()
 
 
-def icoEvPlot(evals, evecs, calphas):
+def icoEvPlot(evals, evecs, sqFlucts, title, coords):
     import matplotlib.pyplot as plt
     from settings import pdb
-    uniques, inds, counts = np.unique(evals.round(decimals=6), return_index=True, return_counts=True)
+    uniques, inds, counts = np.unique(evals.round(decimals=8), return_index=True, return_counts=True)
     icoEvalInds = inds[counts == 1]
     print(icoEvalInds)
     icoEvals = evals[icoEvalInds]
     icoEvecs = evecs[:, icoEvalInds]
+    anm = ANM(pdb)
     anm._eigvals = evals
     anm._eigvecs = evecs
     anm._array = evecs
@@ -282,20 +274,27 @@ def icoEvPlot(evals, evecs, calphas):
     anm._vars = 1 / evals
     print(icoEvecs.shape)
     print(icoEvals)
-    anm._n_atoms = calphas.getCoords().shape[0]
+    anm._n_atoms = evecs.shape[0]
+    # bbanm, bbatoms = extendModel(anm, calphas, capsid.select('backbone'))
     fig, ax = plt.subplots(1, 1, figsize=(16, 12))
     ax.scatter(np.arange(icoEvals.shape[0]), icoEvals, marker='D', label='eigs')
     plt.show()
-    writeNMD(pdb + '_ico.nmd', anm[icoEvalInds], calphas)
+    #from nmdOut import nmdWrite
+    # nmdWrite(pdb, coords, icoEvecs, sqFlucts)
+    #writeNMD(pdb + '_ico.nmd', anm[icoEvalInds], calphas)
+    from prody import traverseMode, writePDB
+    # ensemble = traverseMode(anm[icoEvalInds[0]], calphas, n_steps=15, rmsd=12)
+    # writePDB(pdb + '_icomode.pdb', ensemble, beta=sqFlucts)
 
 
-def mechanicalProperties(bfactors, evals, evecs, coords, hess):
+def mechanicalProperties(bfactors, evals, evecs, title):
     from settings import pdb
     import matplotlib
     import matplotlib.pyplot as plt
     from bfactorFit import fluctFit
     # from score import collectivity, meanCollect, effectiveSpringConstant, overlapStiffness, globalPressure
-    _, calphas, title = getPDB(pdb)
+    # _, calphas, title = getPDB(pdb)
+
     # from settings import cbeta
     # if cbeta:
     #     names = calphas.getNames()
@@ -309,6 +308,7 @@ def mechanicalProperties(bfactors, evals, evecs, coords, hess):
 
     print('Plotting')
     nModes, coeff, k, sqFlucts, stderr = fluctFit(evals, evecs, bfactors)
+    # icoEvPlot(evals, evecs, sqFlucts, title)
 
     fig, ax = plt.subplots(1, 1, figsize=(10, 5))
     font = {'family': 'sans-serif',
@@ -348,7 +348,7 @@ def mechanicalProperties(bfactors, evals, evecs, coords, hess):
     return nModes, gamma
 
 
-def distanceFlucts(evals, evecs, kirch, n_modes):
+def distanceFlucts(evals, evecs, kirch, n_modes, title):
     from scipy import sparse
     from settings import model
     n_modes = int(n_modes)
@@ -371,11 +371,11 @@ def distanceFlucts(evals, evecs, kirch, n_modes):
     d.eliminate_zeros()
     print(d.min())
     # print('Average Fluctuations Between Elements', d.data.mean())
-    fluctPlot(d)
+    fluctPlot(d, title)
     return d
 
 
-def fluctPlot(d):
+def fluctPlot(d, title):
     import matplotlib.pyplot as plt
     print('Plotting Fluctuation Histogram')
     import matplotlib
@@ -390,9 +390,8 @@ def fluctPlot(d):
     ax.tick_params(axis='y', labelsize=8)
     ax.tick_params(axis='x', labelsize=8)
     ax.legend()
-    _, _, title = getPDB(pdb)
     fig.suptitle(
-        'Histogram Of Pairwise Fluctuations: ' + title.title() + ' (' + pdb + ')', fontsize=12)
+        'Histogram Of Pairwise Fluctuations: ' + title + ' (' + pdb + ')', fontsize=12)
 
     ax.hist(d.data, bins='fd', histtype='stepfilled', density=True)
     fig.tight_layout()

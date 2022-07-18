@@ -10,6 +10,18 @@ def fastFlucts(evals, evecs, n_modes):
 
     return flucts
 
+@nb.njit()
+def prsFlucts(evals, evecs, n_modes):
+    n_atoms = evecs.shape[0]
+    flucts = np.zeros(n_atoms)
+    for i in range(n_modes):
+        for j in range(n_atoms):
+            vec = 1/evals[i] * evecs[3*j:3*j+3, i]
+            flucts[j] += np.sum(np.abs(np.outer(vec, vec)))
+    return flucts
+
+
+
 
 #@nb.njit(nb.float64(nb.float64[:], nb.float64[:,:]))
 def springFit(bfactors, sqFlucts):
@@ -58,6 +70,7 @@ def fluctFit(evals, evecs, bfactors):
 # @nb.njit()
 def costFunc(evals, evecs, bfactors, n_modes):
     sqFlucts = fastFlucts(evals,evecs,n_modes)
+    #sqFlucts = prsFlucts(evals, evecs, n_modes)
     if sqFlucts.shape[0] != bfactors.shape[0]:
         sqFlucts = np.reshape(sqFlucts, (-1, 3)).sum(axis=-1)
 

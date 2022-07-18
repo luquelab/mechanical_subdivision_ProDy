@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import numba as nb
 from sklearn.metrics import pairwise_distances
 
 def calcCentroids(X, labels, n_clusters):
@@ -15,7 +16,21 @@ def calcCentroids(X, labels, n_clusters):
             cent = np.mean(clust, axis=0)
             centroids.append(cent)
 
+    return np.array(centroids), False
 
+def calcCosCentroids(X, labels, n_clusters):
+    centroids = []
+    for i in range(n_clusters):
+        mask = (labels==i)
+        if not np.any(mask):
+            print('Some clusters unassigned')
+            centroids.append((np.random.rand(n_clusters)))
+            #return np.array(centroids), True
+        else:
+            clust = X[mask,:]
+            c = np.sum(clust, axis=0)
+            cent = c/np.linalg.norm(c)
+            centroids.append(cent)
 
     return np.array(centroids), False
 
@@ -67,7 +82,8 @@ def plotScores(pdb, n_range, save=False):
             'weight': 'normal',
             'size': 10}
 
-    _, _, title = getPDB(pdb)
+    #_, _, title = getPDB(pdb)
+    title = pdb
 
     matplotlib.rc('font', **font)
 
@@ -311,3 +327,38 @@ def overlapStiffness(evals, evecs, coords):
         k += np.sqrt(e)*overlap
 
     return k
+
+@nb.njit()
+def corrDiags(evals, evecs, nev, nnodes):
+    diags = np.zeros((nnodes, 3, 3))
+    for i in range(nev):
+        eve = evecs[:,i]
+        ev = 1/evals[i]
+        for j in range(nnodes):
+            vec = eve[3*j:3*j+3]
+            diags[j,:,:] += ev * np.outer(vec,vec)
+    return diags
+
+
+#@nb.njit()
+def residueCorrEigs(evals, evecs):
+    print(evecs.shape)
+    nnodes = int(evecs.shape[0]/3)
+    nev = evals.shape[0]
+    cDiags = corrDiags(evals, evecs, nev, nnodes)
+    pVecs = np.zeros((nnodes, 3, 3))
+    sVals = np.zeros((nnodes,3))
+    for i in range(nnodes):
+        mat = cDiags[i,:,:]
+        u, s, v = np.linalg.svd(mat)
+        #sval, sind = (sv.max(), sv.argmax())
+        svec = u #[sind,:]
+        sVals[i,:] = s
+        pVecs[i,:,:] = svec
+
+    return sVals, pVecs
+
+def corrStrains(coords, evals, evecs, pdb):
+    sVals, pVecs = residueCorrEigs(evals, evecs)
+    np.savez_compressed(pdb + 'pvecs.npz', svals = sVals, pvecs = pVecs, coords=coords)
+    return sVals, pVecs

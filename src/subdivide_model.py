@@ -90,7 +90,7 @@ def cluster_embedding(n_range, maps, calphas, method):
     from sklearn.metrics import silhouette_score
     from sklearn.metrics import davies_bouldin_score
     from score import median_score, cluster_types
-    from score import calcCentroids
+    from score import calcCentroids, calcCosCentroids
     from sklearn.preprocessing import normalize
 
 
@@ -113,7 +113,7 @@ def cluster_embedding(n_range, maps, calphas, method):
             # loop = True
             # while loop:
             label = discretize(emb)
-            centroids, loop = calcCentroids(emb, label, n_clusters)
+            centroids, loop = calcCosCentroids(emb, label, n_clusters)
             inert = 0
         elif method == 'kmeans':
             centroids, label, inert, n_iter = k_means(emb, n_clusters=n_clusters, n_init=100, tol=0,
@@ -128,7 +128,7 @@ def cluster_embedding(n_range, maps, calphas, method):
         else:
             print('method should be kmeans or discretize. Defaulting to kmeans')
 
-        normalize(centroids, copy=False)
+        # normalize(centroids, copy=False)
         # normalize(centroids)
         labels.append(label)
         cl = np.unique(label)
@@ -157,28 +157,46 @@ def cluster_embedding(n_range, maps, calphas, method):
         rigidities, fullRigidities, mobilities = realFlucts(n_range[ind], labels[ind])
         saveSubdivisions(labels[ind], n_range[ind], rigidities, fullRigidities, mobilities)
 
+    # for i, score in enumerate(scores):
+    #     if i <2 or i+2 >= len(scores):
+    #         continue
+    #     neighs = scores[i-2:i+2]
+    #     if np.all(score >= neighs):
+    #
+    #         rigidities, fullRigidities, mobilities = realFlucts(n_range[ind], labels[ind])
+    #         saveSubdivisions(labels[ind], n_range[ind], rigidities, fullRigidities, mobilities)
+    #     else:
+    #         continue
+
     return labels, scores, variances, numtypes, inerts
 
 def saveSubdivisions(labels, nsub, rigidities, fullRigidities, mobilities):
-    from settings import pdb
-    from make_model import getPDB
+    from settings import pdb, pdbx
+    from make_model import getPDB, getPDBx
     from prody import writePDB, saveAtoms
-    capsid, _, _ = getPDB(pdb)
-    capsid.setData('clust', -1)
-    capsid.setData('clustrigid', -1)
-    capsid.setData('clustrigidfull', -1)
-    capsid.setData('clustmobilities', -1)
-    nodes = capsid.getData('nodeid')
-    nmax = np.max(nodes)
-    for at in capsid.iterAtoms():
-        node = at.getData('nodeid')
-        at.setData('clust', labels[node % nmax])
-        at.setData('clustrigid', rigidities[node % nmax])
-        at.setData('clustrigidfull', fullRigidities[node % nmax])
-        at.setData('clustmobilities', mobilities[node % nmax])
-        at.setBeta(fullRigidities[node % nmax])
-    writePDB('../results/subdivisions/' + pdb + '/' + pdb + '_' + str(nsub) + '_domains.pdb', capsid,hybrid36=True)
-    saveAtoms(capsid, '../results/subdivisions/' + pdb + '/' + pdb + '_' + str(nsub) + '_domains_atoms')
+    print('Saving subdivisions for: ', nsub)
+    if pdbx:
+        from biotite.structure.io.pdbx import PDBxFile as PDBX
+        import biotite.structure.io as strucio
+        capsid, calphas, coords, bfactors, title = getPDBx(pdb)
+        strucio.save_structure('../results/subdivisions/' + pdb + '/' + pdb + '_' + str(nsub) + '_domains.pdb',capsid)
+    else:
+        capsid, _, _ = getPDB(pdb)
+        capsid.setData('clust', -1)
+        capsid.setData('clustrigid', -1)
+        capsid.setData('clustrigidfull', -1)
+        capsid.setData('clustmobilities', -1)
+        nodes = capsid.getData('nodeid')
+        nmax = np.max(nodes)
+        for at in capsid.iterAtoms():
+            node = at.getData('nodeid')
+            at.setData('clust', labels[node % nmax])
+            at.setData('clustrigid', rigidities[node % nmax])
+            at.setData('clustrigidfull', fullRigidities[node % nmax])
+            at.setData('clustmobilities', mobilities[node % nmax])
+            at.setBeta(fullRigidities[node % nmax])
+        writePDB('../results/subdivisions/' + pdb + '/' + pdb + '_' + str(nsub) + '_domains.pdb', capsid,hybrid36=True)
+        saveAtoms(capsid, '../results/subdivisions/' + pdb + '/' + pdb + '_' + str(nsub) + '_domains_atoms')
     return capsid
 
 
