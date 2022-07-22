@@ -15,8 +15,6 @@ def subdivide_model():
     print('Loading Model')
 
     sims = sparse.load_npz('../results/models/' + pdb + 'sims.npz')
-    calphas = loadAtoms('../results/models/' + 'calphas_' + pdb + '.ag.npz')
-
 
     if not os.path.exists('../results/subdivisions/' + pdb):
         os.mkdir('../results/subdivisions/' + pdb)
@@ -55,7 +53,7 @@ def subdivide_model():
 
     print('Starting Eigenvector Clustering')
     start = time.time()
-    labels, scores, var, ntypes, inerts = cluster_embedding(n_range, maps, calphas, cluster_method)
+    labels, scores, var, ntypes, inerts = cluster_embedding(n_range, maps, cluster_method)
     end = time.time()
     print('Time Of Clustering: ', end - start, ' Seconds')
 
@@ -79,7 +77,7 @@ def embedding(n_evecs, sims):
     print('Memory Usage: ', psutil.virtual_memory().percent)
     return X_transformed
 
-def cluster_embedding(n_range, maps, calphas, method):
+def cluster_embedding(n_range, maps, method):
     print('Clustering Embedded Points')
 
     from sklearn.cluster import k_means

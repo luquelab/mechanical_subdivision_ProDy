@@ -1,4 +1,4 @@
-#! /home/ctbrown/anaconda3/bin/python3
+#!/home/ctbrown/anaconda3/envs/idp/bin/python3
 #PBS -l nodes=1:ppn=24
 #PBS -l walltime=96:00:00
 
