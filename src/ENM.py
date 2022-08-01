@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numba as nb
 import numpy as np
 from settings import *
@@ -18,13 +19,18 @@ def buildENM(calphas, coords, bfactors):
     kirch = radius_neighbors_graph(tree, cutoff, mode='distance', n_jobs=-1)
     kc = kirch.tocoo().copy()
     kc.sum_duplicates()
-    kirch = kirchGamma(kc, bfactors, d2=d2, flexibilities=flexibilities, cbeta=cbeta, struct=False).tocsr()
-    # kirch = betaTestKirch(coords)
+    kirch = kirchGamma(kc, bfactors, d2=d2, flexibilities=flexibilities, struct=False)
+    backbone = True
+    if backbone:
+        kbb = 5
+        kirch = backbonePrody(calphas, kirch.tolil(), kbb, s=3)
     print('nonzero values: ', kirch.nnz)
     dg = np.array(kirch.sum(axis=0))
     kirch.setdiag(-dg[0])
     kirch.sum_duplicates()
-    print(kirch.data)
+    kirch = kirch.tocsr()
+    #print(kirch.data)
+    print('kirch: ', kirch.diagonal(k=0))
 
     if model=='anm':
         kc = kirch.tocoo().copy()
@@ -37,6 +43,10 @@ def buildENM(calphas, coords, bfactors):
     else:
         hessian = kirch.copy()
     print('done constructing matrix')
+    # fig, ax = plt.subplots()
+    # mat = ax.matshow(hessian[:int(3 * n_asym / 10), :int(3 * n_asym / 10)].todense())
+    # plt.colorbar(mat, ax=ax)
+    # plt.show()
     return kirch, hessian
 
 
@@ -73,7 +83,7 @@ def kirchGamma(kirch, bfactors, **kwargs):
     #     # kg = addSulfideBonds(sulfs, kg)
     if 'd2' in kwargs and kwargs['d2']:
         print('d2 mode')
-        kg.data = -1/(kg.data**2)
+        kg.data = -1/((kg.data)**2)
     else:
         kg.data = -np.ones_like(kg.data)
 
@@ -167,8 +177,45 @@ def hessCalc(row, col, kGamma, coords):
         hData[k,:,:] = hblock
         hData[dinds[i]] += -hblock/2
         hData[dinds[j]] += -hblock/2
-
     return hData
+
+def backbonePrody(calphas, kirch, k, s):
+    nr = calphas.numAtoms()
+    count = 0
+    chid = 0
+    ch0 = calphas[0].getChid()
+    seg0 = calphas[0].getSegname()
+    # kirch[0,1:3] = -k
+    # kirch[1:3, 0] = -k
+    nch = 0
+    kbbs = np.array([k,k/2,k/4])[:s]
+    for i, ca in enumerate(calphas.iterAtoms()):
+        if count == 0:
+            kirch[i, (i + 1):(i + 1 + s)] = -kbbs
+            kirch[(i + 1):(i + 1 + s), i] = -kbbs
+            count += 1
+            continue
+        elif count<=s:
+            kbbs = kbbs[::-1]
+            kirch[i, (i - count):i] = -kbbs[-count:]
+            kirch[(i - count):i, i] = -kbbs[-count:]
+            count += 1
+            continue
+        if ca.getChid() == ch0 and ca.getSegname() == seg0:
+            kirch[i, (i-s):i] = -kbbs
+            kirch[(i - s):i,i] = -kbbs
+            count += 1
+        else:
+            chid += 1
+            #print(ch0, seg0, 'done')
+            ch0 = ca.getChid()
+            seg0 = ca.getSegname()
+            count = 0
+            nch += 1
+    print(nch)
+    return kirch.tocsr()
+
+
 
 def betaTestKirch(coords):
     from sklearn.neighbors import BallTree, radius_neighbors_graph
@@ -213,29 +260,283 @@ def betaTestKirch(coords):
 
     return fullKirch
 
-def betaCarbonModel(kirch, coords):
-    from settings import cutoff
+def betaCarbonModel(calphas):
+    from settings import cutoff, d2, fanm
     from sklearn.neighbors import BallTree, radius_neighbors_graph
-    betaCoords = buildBetas(coords)
+    from scipy import sparse
+    coords = calphas.getCoords()
+    n_atoms = coords.shape[0]
+    n_asym = int(n_atoms / 60)
+
+    print('# Atoms ', n_atoms)
+    dof = n_atoms * 3
+    betaCoords, bvals, nobetas = buildBetas(coords, calphas)
+    print(bvals.shape)
+    print(betaCoords.shape)
+
+    tree = BallTree(coords)
+    kirch = radius_neighbors_graph(tree, cutoff, mode='distance', n_jobs=-1)
+    kc = kirch.tocoo().copy()
+    kc.sum_duplicates()
+    bfactors = calphas.getBetas()
+    kirch = kirchGamma(kc, bfactors, d2=d2)
+    backbone = True
+    if backbone:
+        kbb = 5
+        kirch = backbonePrody(calphas, kirch.tolil(), kbb, s=1)
+    print('nonzero values: ', kirch.nnz)
+    dg = np.array(kirch.sum(axis=0))
+    kirch.setdiag(-dg[0])
+    kirch.sum_duplicates()
+    kirch = kirch.tocsr()
 
     btree = BallTree(betaCoords)
     betaKirch = radius_neighbors_graph(btree, cutoff, mode='distance',  n_jobs=-1)
-    abKirch = btree.query_radius(coords, r=cutoff, return_distance=True)
+    betaKirch = kirchGamma(betaKirch.tocoo(), bfactors, d2=d2).tocsr()
+    #abKirch = tree.query_radius(betaCoords, r=cutoff, return_distance=True).tocoo()
+
+    if model=='anm':
+        kc = kirch.tocoo().copy()
+        kc.sum_duplicates()
+        haaData = hessCalc(kc.row, kc.col, kirch.data, coords)
+        indpt = kirch.indptr
+        inds = kirch.indices
+        haa = sparse.bsr_matrix((haaData, inds, indpt), shape=(dof, dof)).tolil()
+        haa = fanm * haa + (1 - fanm) * sparse.kron(kirch, np.identity(3))
+        haa = haa.tocsr()
+        haa.eliminate_zeros()
+        kbc = betaKirch.tocoo().copy()
+        kbc.sum_duplicates()
+        row, col = (kbc.row, kbc.col)
+        hbb = bbHessCalcSlow(row, col, betaCoords, bvals, nobetas, kbc.data).tocsr()
+        hbb = fanm * hbb + (1 - fanm) * sparse.kron(kbc, np.identity(3))
+        # ijr, hbbData = bbHessCalc(row, col, betaCoords, bvals, nobetas, kbc.data)
+        # ijr = np.array(ijr)
+        # hbbData = np.array(hbbData)
+        # hbb = sparse.coo_matrix((hbbData, (ijr[:,0],ijr[:,1])), shape=(dof, dof)).tocsr()
+        hbb.eliminate_zeros()
+        hbb.sum_duplicates()
+
+        # row, col = (abKirch.row, abKirch.col)
+        # hab = abHessCalcSlow(row, col, betaCoords, coords, bvals, nobetas, abKirch.data).tocsr()
+        # # ijr, hbbData = bbHessCalc(row, col, betaCoords, bvals, nobetas, kbc.data)
+        # # ijr = np.array(ijr)
+        # # hbbData = np.array(hbbData)
+        # # hbb = sparse.coo_matrix((hbbData, (ijr[:,0],ijr[:,1])), shape=(dof, dof)).tocsr()
+        # hab.eliminate_zeros()
+        # hab.sum_duplicates()
+
+        from sklearn.utils.validation import check_symmetric
+        check_symmetric(haa, raise_exception=True, tol=1e-5)
+        check_symmetric(hbb, raise_exception=True, tol=1e-5)
+        #check_symmetric(hab, raise_warning=True, tol=1e-5)
+
+    hess = haa + hbb/2 #+ hab/2
+    print(hess.data)
+    kirch = betaKirch + kirch
+    hess.eliminate_zeros()
+    fig, ax = plt.subplots()
+    mat = ax.matshow(hess[:int(3*n_asym), :int(3*n_asym)].todense())
+    plt.colorbar(mat, ax=ax)
+    plt.show()
+
+    fig, ax = plt.subplots()
+    mat = ax.matshow(haa[:int(3 * n_asym), :int(3 * n_asym)].todense())
+    plt.colorbar(mat, ax=ax)
+    plt.show()
+
+    return kirch, hess
 
 
-    return abKirch, betaKirch, kirch
+# @nb.njit()
+def buildBetas(coords, calphas):
+    na = calphas.numAtoms()
+    noBetas = []
+    bvals = []
+    bcoords = np.zeros_like(coords)
+    count = 0
+    chid = 0
+    ch0 = calphas[0].getChid()
+    seg0 = calphas[0].getSegname()
+    nch = 0
+    for i, ca in enumerate(calphas.iterAtoms()):
+        if count == 0 or ca.getResname()=='GLY' or i==na-1:
+            bcoords[i, :] = coords[i, :]
+            bvals.append(1)
+            noBetas.append(i)
+            count += 1
+        elif ca.getChid() == ch0 and ca.getSegname() == seg0:
+
+            r = 2 * coords[i, :] - coords[i - 1, :] - coords[i + 1, :]
+            b = 1/np.linalg.norm(r)
+            bvals.append(b)
+            bcoords[i, :] = coords[i, :] + 3.0 * r * b
+            count += 1
+        else:
+            bcoords[i-1, :] = coords[i-1, :]
+            bcoords[i, :] = coords[i, :]
+            noBetas.append(i-1)
+            bvals.append(1)
+            chid += 1
+            ch0 = ca.getChid()
+            seg0 = ca.getSegname()
+            count = 0
+            nch += 1
+
+    noBetas.append(i)
+
+    return bcoords, np.array(bvals), np.array(noBetas)
+
 
 
 @nb.njit()
-def buildBetas(coords):
-    bcoords = np.zeros_like(coords)
-    for i in range(coords.shape[0]):
-        if i==0 or i==coords.shape[0]:
+def betaBetaBond(rvec, bi, bj):
+    r2 = np.sum(rvec**2)
+    mat = np.outer(rvec, rvec)/r2
+    rmat1 = np.zeros((9,9))
+    m1 = -9*bi*bj * mat
+    rmat1[0:3, 0:3] = m1
+    rmat1[0:3, 6:9] = m1
+    rmat1[6:9, 0:3] = m1
+    rmat1[6:9, 6:9] = m1
+
+    m2 = 3 * bi * (1+6*bj) * mat
+    rmat1[3:6, 0:3] = m2
+    rmat1[3:6, 6:9] = m2
+
+    m3 = 3 * bj * (1 + 6 * bi) * mat
+    rmat1[0:3, 3:6] = m3
+    rmat1[6:9, 3:6] = m3
+
+    m4 = -(1+6*bi) * (1 + 6 * bj) * mat
+    rmat1[3:6, 3:6] = m4
+    #
+    #
+    # rmat2 = np.zeros((9, 9))
+    # m1 = 9 * bi * bi * mat
+    # rmat2[0:3, 0:3] = m1
+    # rmat2[0:3, 6:9] = m1
+    # rmat2[6:9, 0:3] = m1
+    # rmat2[6:9, 6:9] = m1
+    #
+    # m2 = -3 * bi * (1 + 6 * bi) * mat
+    # rmat2[3:6, 0:3] = m2
+    # rmat2[3:6, 6:9] = m2
+    #
+    # m3 = -3 * bi * (1 + 6 * bi) * mat
+    # rmat2[0:3, 3:6] = m3
+    # rmat2[6:9, 3:6] = m3
+    #
+    # m4 = (1 + 6 * bi) * (1 + 6 * bi) * mat
+    # rmat1[3:6, 3:6] = m4
+
+    return rmat1
+
+@nb.njit()
+def alphaBetaBond(rvec, bj):
+
+    r2 = np.sum(rvec**2)
+    mat = np.outer(rvec, rvec)/r2
+    rmat1 = np.zeros((3,9))
+    rmat2 = np.zeros((9,9))
+
+    m1 = 3*bj * mat
+    rmat1[:, 0:3] = m1
+    rmat1[:, 6:9] = m1
+
+    m2 = - (1+6*bj) * mat
+    rmat1[3:6, 0:3] = m2
+    rmat1[3:6, 6:9] = m2
+
+    m1 = 9 * bj * bj * mat
+    rmat2[0:3, 0:3] = m1
+    rmat2[0:3, 6:9] = m1
+    rmat2[6:9, 0:3] = m1
+    rmat2[6:9, 6:9] = m1
+
+    m2 = -3 * bj * (1 + 6 * bj) * mat
+    rmat2[3:6, 0:3] = m2
+    rmat2[3:6, 6:9] = m2
+    rmat2[0:3, 3:6] = m2
+    rmat2[6:9, 3:6] = m2
+
+    m3 = (1 + 6 * bj) * (1 + 6 * bj) * mat
+    rmat2[3:6, 3:6] = m3
+
+    return rmat1, rmat2
+
+
+@nb.njit()
+def bbHessCalc(row, col, bcoords, bvals, nobetas, kGamma):
+    hData = [] #np.zeros((6*row.shape[0], 3, 3))
+    ijr = [] #np.zeros((6*row.shape[0],2))
+    for k, (i,j) in enumerate(zip(row, col)):
+        if abs(i-j) > 2 or np.any(nobetas==i) or np.any(nobetas==j):
             continue
-        else:
-            r = 2*coords[i,:] - coords[i-1,:]-coords[i+1,:]
-            bcoords[i,:] = coords[i,:] + 3.0*(r)/np.linalg.norm(r)
-    return bcoords
+        bi = bvals[i]
+        bj = bvals[j]
+        rvec = bcoords[j] - bcoords[i]
+        g = kGamma[k]
+        hblock = betaBetaBond(rvec, bi, bj)
+
+        for l in range(9):
+            for m in range(9):
+                lm = (3*(i-1)+l, 3*(j-1)+m)
+                ijr.append(lm)
+                hData.append(hblock[l,m])
+                ijr.append(lm[::-1])
+                hData.append(hblock[l, m])
+
+                ijr.append((3*(i-1)+l, 3*(i-1)+m))
+                hData.append(-hblock[l,m]/2)
+
+                ijr.append((3*(j-1)+l, 3*(j-1)+m))
+                hData.append(-hblock[l,m] / 2)
+
+    return ijr, hData
+
+def bbHessCalcSlow(row, col, bcoords, bvals, nobetas, kGamma):
+    from scipy import sparse
+    dof = 3*bcoords.shape[0]
+    hbb = sparse.lil_matrix((dof, dof))
+    for k, (i,j) in enumerate(zip(row, col)):
+        if abs(i-j) <= 1 or np.any(nobetas==i) or np.any(nobetas==j):
+            continue
+        bi = bvals[i]
+        bj = bvals[j]
+        rvec = bcoords[j] - bcoords[i]
+        g = -kGamma[k]
+
+        ijblock = g*betaBetaBond(rvec, bi, bj)
+        jiblock = g*betaBetaBond(rvec, bj, bi)
+        iiblock = -g*betaBetaBond(rvec, bi, bi)
+        jjblock = -g*betaBetaBond(rvec, bj, bj)
+        hbb[3*i-3:3*i+6, 3*j-3:3*j+6] += ijblock
+        hbb[3 * j - 3:3 * j + 6, 3 * i - 3:3 * i + 6] += jiblock
+        hbb[3*i-3:3*i+6, 3*i-3:3*i+6] += iiblock/2
+        hbb[3 * j - 3:3 * j + 6, 3 * j - 3:3 * j + 6] += jjblock/2
+
+    return hbb
+
+def abHessCalcSlow(row, col, bcoords, coords, bvals, nobetas, kGamma):
+    from scipy import sparse
+    dof = 3*bcoords.shape[0]
+    hab = sparse.lil_matrix((dof, dof))
+    for k, (i,j) in enumerate(zip(row, col)):
+        if abs(i-j) > 1 or np.any(nobetas==j):
+            continue
+        bj = bvals[j]
+        rvec = bcoords[j] - coords[i]
+        g = kGamma[k]
+        ijblock, jjblock = alphaBetaBond(rvec, bj)
+        jiblock = ijblock.T
+        iiblock = -ijblock[:,3:6]
+        hab[3*i:3*i+3, 3*j-3:3*j+6] += ijblock
+        hab[3 * j - 3:3 * j + 6, 3 * i:3 * i + 3] += jiblock
+        hab[3*i:3*i+3, 3*i:3*i+3] += iiblock
+        hab[3 * j - 3:3 * j + 6, 3 * j - 3:3 * j + 6] += jjblock
+
+    return hab
 
 def addSulfideBonds(sulfs, kirch):
     sCoords = sulfs.getCoords()
@@ -265,5 +566,71 @@ def addIonBonds(atoms, kirch, dists):
 
     return kirch
 
+def buildChemENM(capsid):
+    from scipy import sparse
+    import numpy as np
+    from sklearn.neighbors import BallTree, radius_neighbors_graph, kneighbors_graph
+    import biotite.structure as struc
+    calphas = capsid[capsid.atom_name == 'CA']
+    print("Number of protein residues:", struc.get_residue_count(capsid))
+    coords = calphas.coord #struc.apply_residue_wise(capsid, capsid.coord, np.average, axis=0)
+    n_atoms = coords.shape[0]
 
+    from bondStrengths import detect_disulfide_bonds
+    sulfs = detect_disulfide_bonds(capsid)
+    print(sulfs.shape[0])
 
+    from bondStrengths import detect_salt_bridges
+    salts = detect_salt_bridges(capsid)
+    print(salts.shape)
+
+    from bondStrengths import hbondSites
+    hbonds = hbondSites(capsid)
+    print(hbonds.shape[0])
+
+    print('# Atoms ',n_atoms)
+    dof = n_atoms * 3
+
+    tree = BallTree(coords)
+    kirch = radius_neighbors_graph(tree, 7.5, mode='distance', n_jobs=-1)
+    kc = kirch.tocoo().copy()
+    kc.sum_duplicates()
+    kirch = kirchChem(kc.tocsr(), hbonds, sulfs, salts)
+    # kirch = betaTestKirch(coords)
+    print('nonzero values: ', kirch.nnz)
+    dg = np.array(kirch.sum(axis=0))
+    kirch.setdiag(-dg[0])
+    kirch.sum_duplicates()
+    print(kirch.data)
+
+    if model=='anm':
+        kc = kirch.tocoo().copy()
+        kc.sum_duplicates()
+        hData = hessCalc(kc.row, kc.col, kirch.data, coords)
+        indpt = kirch.indptr
+        inds = kirch.indices
+        hessian = sparse.bsr_matrix((hData, inds, indpt), shape=(dof,dof)).tocsr()
+        hessian = fanm*hessian + (1-fanm)*sparse.kron(kirch, np.identity(3))
+    else:
+        hessian = kirch.copy()
+    print('done constructing matrix')
+    return kirch, hessian
+
+def kirchChem(kirch, hbonds, sulfbonds, salts):
+    kg = kirch.copy()
+    kg.data = -1/kg.data**2
+
+    for ij in hbonds:
+        i, j = (ij[0], ij[1])
+        kg[i,j] = -10
+
+    for ij in salts:
+        i, j = (ij[0], ij[1])
+        kg[i,j] = -10
+
+    for ij in sulfbonds:
+        i, j = (ij[0], ij[1])
+        kg[i,j] = -100
+
+    kg.data = np.where(kg.data<=-1/(3**2), -100, kg.data)
+    return kg

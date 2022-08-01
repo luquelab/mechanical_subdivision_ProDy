@@ -11,7 +11,7 @@ from scipy import sparse
 from settings import *
 
 
-def make_model(pdbx):
+def make_model():
 
     if pdbx:
         capsid, calphas, coords, bfactors, title = getPDBx(pdb)
@@ -73,13 +73,9 @@ def getPDB(pdb):
         print(capsid)
     if type(capsid) is list:
         capsid = capsid[0]
-    from settings import cbeta
     capsid = capsid.select('protein').copy()
     capsid = addNodeID(capsid)
-    if cbeta:
-        calphas = capsid.select('protein and name CA CB').copy()
-    else:
-        calphas = capsid.select('protein and name CA')
+    calphas = capsid.select('protein and name CA')
     print('Number Of Residues: ', calphas.getCoords().shape[0])
     os.chdir('../../src')
 
@@ -131,9 +127,13 @@ def addNodeID(atoms):
     return atoms
 
 def buildModel(pdb, calphas, coords, bfactors, cutoff=10.0):
-    from ENM import buildENM
+    from ENM import buildENM, betaCarbonModel
+    from settings import cbeta
     start = time.time()
-    kirch, hess = buildENM(calphas, coords, bfactors)
+    if cbeta:
+        kirch, hess = betaCarbonModel(calphas)
+    else:
+        kirch, hess = buildENM(calphas, coords, bfactors)
     # anm.setHessian(hess)
     # anm._kirchhoff = kirch
     sparse.save_npz('../results/models/' + pdb + 'hess.npz', hess)
@@ -201,10 +201,8 @@ def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model):
     if cuth_mkee:
         evecs = evecs[perm, :].copy()
     useMass=False
-    print(evals)
     end = time.time()
     print('NMA time: ', end - start)
-    print(evals[:6])
     np.savez('../results/models/' + pdb + model + 'modes.npz', evals=evals, evecs=evecs)
     return evals, evecs
 
@@ -328,7 +326,7 @@ def mechanicalProperties(bfactors, evals, evecs, title):
 
     print(nModes, coeff, gamma)
     n_asym = int(bfactors.shape[0]/60)
-    np.savez('../results/subdivisions/' + pdb + '_sqFlucts.npz', sqFlucts=sqFlucts, k=k, cc=coeff, nModes=nModes)
+    np.savez('../results/subdivisions/' + pdb + '_sqFlucts.npz', sqFlucts=sqFlucts, bf=bfactors, k=k, cc=coeff, nModes=nModes)
     ax.plot(np.arange(bfactors.shape[0])[:int(n_asym)], bfactors[:int(n_asym)], label='B-factors')
     ax.plot(np.arange(sqFlucts.shape[0])[:int(n_asym)], sqFlucts[:int(n_asym)], label='Squared Fluctuations')
     ax.set_ylabel(r'$Å^{2}$', fontsize=12)
