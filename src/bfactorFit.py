@@ -33,9 +33,6 @@ def springFit(bfactors, sqFlucts):
     return a
 
 
-@nb.njit()
-def l1Cost(bfactors, sqFlucts, a):
-    return np.sum(np.abs(bfactors - a * sqFlucts))
 
 def fluctFit(evals, evecs, bfactors):
     fitmodes = False

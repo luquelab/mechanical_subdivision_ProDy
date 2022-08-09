@@ -44,7 +44,7 @@ def subdivide_model():
         else:
             print('Starting Spectral Embedding')
         start = time.time()
-        maps = embedding(n_evecs, sims)
+        maps = skembedding(n_evecs, sims)
         end = time.time()
         print('Time Of Spectral Embedding: ', end - start, ' Seconds')
         from sklearn.preprocessing import normalize
@@ -67,13 +67,14 @@ def subdivide_model():
 
     #return -1
 
-def embedding(n_evecs, sims):
-    from spectralStuff import spectral_embedding
+def skembedding(n_evecs, sims):
+    #from spectralStuff import spectral_embedding
+    from sklearn.manifold import spectral_embedding
     from make_model import evPlot
     print('Performing Spectral Embedding')
     from scipy.sparse.csgraph import connected_components
     print(connected_components(sims))
-    X_transformed, evals = spectral_embedding(sims, n_components=n_evecs, drop_first=False, eigen_solver = 'lobpcg', norm_laplacian=False)
+    X_transformed= spectral_embedding(sims, n_components=n_evecs, drop_first=False, eigen_solver = 'amg', norm_laplacian=False)
     print('Memory Usage: ', psutil.virtual_memory().percent)
     return X_transformed
 
@@ -111,9 +112,12 @@ def cluster_embedding(n_range, maps, method):
             # loop = True
             # while loop:
             label = discretize(emb)
-            centroids, loop = calcCosCentroids(emb, label, n_clusters)
+            #centroids, loop = calcCosCentroids(emb, label, n_clusters)
+            centroids, loop = calcCentroids(emb, label, n_clusters)
             inert = 0
         elif method == 'kmeans':
+            #from sklearnex import patch_sklearn
+            #patch_sklearn()
             centroids, label, inert, n_iter = k_means(emb, n_clusters=n_clusters, n_init=100, tol=0,
                                                   return_n_iter=True)
         elif method == 'both':
@@ -150,10 +154,10 @@ def cluster_embedding(n_range, maps, method):
         np.savez('../results/subdivisions/' + pdb + '/' + pdb + '_' + nc + '_results', labels=label, score=testScore,
                  var=var, ntypes=ntypes, n=n, method=cluster_method, inertia=inert)
 
-    best = np.argpartition(scores, -3)[-3:]  # indices of 3 best scores
+    best = np.argpartition(scores, -2)[-2:]  # indices of 3 best scores
     for ind in best:
-        rigidities, fullRigidities, mobilities = realFlucts(n_range[ind], labels[ind])
-        saveSubdivisions(labels[ind], n_range[ind], rigidities, fullRigidities, mobilities)
+        #rigidities, fullRigidities, mobilities = realFlucts(n_range[ind], labels[ind])
+        saveSubdivisions(labels[ind], n_range[ind], np.zeros_like(labels[ind]), np.zeros_like(labels[ind]), np.zeros_like(labels[ind]))
 
     # for i, score in enumerate(scores):
     #     if i <2 or i+2 >= len(scores):
@@ -179,7 +183,7 @@ def saveSubdivisions(labels, nsub, rigidities, fullRigidities, mobilities):
         capsid, calphas, coords, bfactors, title = getPDBx(pdb)
         strucio.save_structure('../results/subdivisions/' + pdb + '/' + pdb + '_' + str(nsub) + '_domains.pdb',capsid)
     else:
-        capsid, _, _ = getPDB(pdb)
+        capsid, _, _, _ = getPDB(pdb)
         capsid.setData('clust', -1)
         capsid.setData('clustrigid', -1)
         capsid.setData('clustrigidfull', -1)

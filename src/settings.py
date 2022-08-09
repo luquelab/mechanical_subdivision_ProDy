@@ -5,14 +5,16 @@
 #     similarities - start from an already computed set of similarities
 #     embedding - start from an already computed spectral embedding
 #     clustering - start from an already computed clustering (rigidity analysis and plotting)
+
 global mode
 mode = 'full'
 
 # PDB variables
 # pdb: The protein databank id for downloading the file
 # pdbx: true or false, whether the pdb uses the pdbx/mmcif format
+
 global pdb, pdbx
-pdb = '7mu1'
+pdb = '7s20'
 pdbx = False
 
 # Model Parameters
@@ -24,14 +26,23 @@ pdbx = False
 # cbeta: Whether to include beta carbon atoms
 # d2: Whether to scale interaction strength by the inverse square distance
 # flexibilities: Whether to use b-factors from the pdb to estimate pairwise spring constants
-global model, fanm, cbeta, cutoff, d2, flexibilities
-model = 'gnm'
-cutoff = 8
 
-fanm = 0.9
-cbeta = False
-d2 = True
+global model, fanm, cbeta, aaGamma, bbGamma, abGamma, cutoff, d2, flexibilities, backboneStrength, bblen
+model = 'anm'
+cutoff = 7
+
+fanm = 1
+d2 = False
 flexibilities = False
+
+backboneConnect = True
+backboneStrength = 2
+bblen = 3
+
+cbeta = True
+aaGamma = 1
+bbGamma = 1/4
+abGamma = 1/2
 
 # NMA Options
 # n_modes: Number of low frequency modes to calculate
@@ -43,10 +54,9 @@ flexibilities = False
 #     'lobcuda' - GPU accelerated lobpcg through the cupy package, requires a cuda implementation
 
 global n_modes, fitmodes, eigmethod
-n_modes = 60
-fitmodes = True
+n_modes = 300
+fitmodes = False
 eigmethod = 'lobcuda'
-
 
 # Clustering Options
 # cluster_method: Method of determining quasi-rigid clusters from spectral embedding
@@ -59,6 +69,6 @@ eigmethod = 'lobcuda'
 global cluster_method, scoreMethod, cluster_start, cluster_stop, cluster_step
 cluster_method = 'discretize'
 scoreMethod = 'mean'
-cluster_start = 4
-cluster_stop = 100
-cluster_step = 1
+cluster_start = 12
+cluster_stop = 94
+cluster_step = 2

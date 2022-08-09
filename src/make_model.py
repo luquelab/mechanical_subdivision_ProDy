@@ -1,3 +1,4 @@
+import cupy
 from prody import *
 import os
 import wget
@@ -16,7 +17,7 @@ def make_model():
     if pdbx:
         capsid, calphas, coords, bfactors, title = getPDBx(pdb)
     else:
-        capsid, calphas, title = getPDB(pdb)
+        capsid, calphas, title, header = getPDB(pdb)
         coords = calphas.getCoords()
         bfactors = calphas.getBetas()
 
@@ -83,7 +84,7 @@ def getPDB(pdb):
              hybrid36=True)
     title = header['title']
 
-    return capsid, calphas, title
+    return capsid, calphas, title, header
 
 def getPDBx(pdb):
     import biotite.database.rcsb as rcsb
@@ -95,7 +96,6 @@ def getPDBx(pdb):
     pdbx_file.read(file_name)
     capsid = pdbx.get_assembly(pdbx_file, assembly_id="1", model=1, extra_fields=['b_factor'])
     title = pdbx_file.get_category('pdbx_database_related')['details']
-    print(title)
     print("Number of protein chains:", struc.get_chain_count(capsid))
     calphas = capsid[capsid.atom_name == 'CA']
     coords = calphas.coord
@@ -178,26 +178,64 @@ def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model):
     n_dim = mat.shape[0]
     if eigmethod == 'eigsh':
         M = sparse.identity(n_dim)
-        evals, evecs = eigsh(mat, M=M, k=n_modes, sigma=1e-8, which='LA')
+        evals, evecs = eigsh(mat, M=M, k=n_modes, sigma=1e-10 , which='LA')
     elif eigmethod == 'lobpcg':
         from scipy.sparse.linalg import lobpcg
-        print(mat.shape)
+        from pyamg import smoothed_aggregation_solver
+        diag_shift = 1e-5 * sparse.eye(mat.shape[0])
+        mat += diag_shift
+        ml = smoothed_aggregation_solver(mat)
+        mat -= diag_shift
+        M = ml.aspreconditioner()
         epredict = np.random.rand(n_dim, n_modes + 6)
-        evals, evecs = lobpcg(mat, epredict, largest=False, tol=0, maxiter=n_dim)
+        evals, evecs = lobpcg(mat, epredict, M=M, largest=False, tol=0, maxiter=n_dim)
         evals = evals[6:]
         evecs = evecs[:, 6:]
-        print(evecs.shape)
     elif eigmethod == 'lobcuda':
+        from pyamg import smoothed_aggregation_solver
         import cupy as cp
         from cupyx.scipy.sparse.linalg import lobpcg as clobpcg
+        from cupyx.scipy.sparse.linalg import aslinearoperator, LinearOperator, spilu
+        #ml = smoothed_aggregation_solver(mat)
+        #ml = ml.aspreconditioner()
+        #ml = aslinearoperator(ml)
+        #m = lambda b : ml.matvec(cp.asnumpy(b))
         sparse_gpu = cp.sparse.csr_matrix(mat.astype(cp.float32))
-        epredict = cp.random.rand(n_dim, n_modes + 6, dtype = np.float32)
-        print(sparse_gpu, epredict)
-        M = cp.sparse.identity(n_dim)
-        evals, evecs = clobpcg(sparse_gpu, epredict, largest=False, tol=0)
-        evals = cp.asnumpy(evals[6:])
-        evecs = cp.asnumpy(evecs[:, 6:])
-        print(evecs.shape)
+        epredict = cp.random.rand(n_dim, n_modes + 6, dtype = cp.float32)
+        #M = aslinearoperator(ml)
+        #M = LinearOperator(sparse_gpu.shape, ml)
+        #lu = sparse.linalg.splu(mat)
+        lu = spilu(sparse_gpu, fill_factor=10)  # LU decomposition
+        M = LinearOperator(mat.shape, lu.solve)
+        print('gpu eigen')
+        evals, evecs = clobpcg(sparse_gpu, epredict,  largest=False, tol=0, verbosityLevel=0)
+        if model=='anm':
+            evals = cp.asnumpy(evals[6:])
+            evecs = cp.asnumpy(evecs[:, 6:])
+        else:
+            evals = cp.asnumpy(evals[1:])
+            evecs = cp.asnumpy(evecs[:, 1:])
+    elif eigmethod == 'eigshcuda':
+        import cupy as cp
+        import cupyx.scipy.sparse as cpsp
+        import cupyx.scipy.sparse.linalg as cpsp_la
+        sigma = 1e-10
+        sparse_gpu_shifted = cp.sparse.csr_matrix((mat - sigma*sparse.eye(mat.shape[0])).astype(cp.float32))
+        #mat_shifted = sparse.csc_matrix(mat - sigma*sparse.eye(mat.shape[0]))
+        #lu = sparse.linalg.splu(mat_shifted)
+        A_gpu_LU = cpsp_la.splu(sparse_gpu_shifted)  # LU decomposition
+        #A_gpu_LO = cpsp_la.LinearOperator(mat_shifted.shape, lu.solve)  # Linear Operator
+        A_gpu_LO = cpsp_la.LinearOperator(sparse_gpu_shifted.shape, A_gpu_LU.solve)
+
+        eigenvalues_gpu, eigenstates_gpu = cpsp_la.eigsh(A_gpu_LO, k=n_modes, which='LA', tol=0)
+
+        eigenvalues_gpu = eigenvalues_gpu.get()
+        eigenstates_gpu = eigenstates_gpu.get()
+        eigenvalues_gpu = (1 + eigenvalues_gpu * sigma) / eigenvalues_gpu
+        idx = np.argsort(eigenvalues_gpu)
+        eigenvalues_gpu = eigenvalues_gpu[idx]
+        evals = cp.asnumpy(eigenvalues_gpu)
+        evecs = cp.asnumpy(eigenstates_gpu)
     if cuth_mkee:
         evecs = evecs[perm, :].copy()
     useMass=False
@@ -248,7 +286,7 @@ def evPlot(evals, evecs, title):
     ax.tick_params(axis='x', labelsize=8)
     ax.legend()
     fig.suptitle(
-        'Eigenvalues/Squared Frequencies: ' + title.title() + ' (' + pdb + ')', fontsize=12)
+        'Eigenvalues/Squared Frequencies: ' + ' (' + pdb + ')', fontsize=12)
 
     ax.scatter(np.arange(evals.shape[0]), evals, marker='D', s=10, label='eigs')
     fig.tight_layout()
@@ -336,7 +374,7 @@ def mechanicalProperties(bfactors, evals, evecs, title):
 
     ax.legend()
     fig.suptitle(
-        'Squared Fluctuations vs B-factors: ' + title.title() + ' (' + pdb + ')' + "\n" + r' $\gamma = $' + "{:.5f}".format(
+        'Squared Fluctuations vs B-factors: '  + ' (' + pdb + ')' + "\n" + r' $\gamma = $' + "{:.5f}".format(
             gamma) +  r'$\pm$' + "{:.5f}".format(ci) + r' $k_{b}T/Å^{2}$' + '  CC = ' + "{:.5f}".format(coeff), fontsize=12)
     # fig.suptitle('# Modes: ' + str(nModes) + ' Corr. Coeff: ' + str(coeff) + ' Spring Constant: ' + str(gamma), fontsize=16)
     # fig.tight_layout()
@@ -418,8 +456,8 @@ def cov(evals, evecs, i, j):
     n_e = evals.shape[0]
     # n_d = evecs.shape[1]
     tr1 = 0
-    # tr2 = 0
-    # tr3 = 0
+    tr2 = 0
+    tr3 = 0
     for n in nb.prange(n_e):
         l = evals[n]
         tr1 += 1 / l * (evecs[3 * i, n] * evecs[3 * j, n] + evecs[3 * i + 1, n] * evecs[3 * j + 1, n] + evecs[
@@ -428,7 +466,7 @@ def cov(evals, evecs, i, j):
         #     3 * i + 2, n] * evecs[3 * i + 2, n])
         # tr3 += 1 / l * (evecs[3 * j, n] * evecs[3 * j, n] + evecs[3 * j + 1, n] * evecs[3 * j + 1, n] + evecs[
         #     3 * j + 2, n] * evecs[3 * j + 2, n])
-    cov = tr1  # / np.sqrt(tr2 * tr3)
+    cov = tr1#  / np.sqrt(tr2 * tr3)
     return cov
 
 
@@ -444,16 +482,15 @@ def gCov(evals, evecs, i, j):
     return cov
 
 
-# @nb.njit()
+#@nb.njit()
 def gCon_c(evals, evecs, c, row, col):
     for k in range(row.shape[0]):
         i, j = (row[k], col[k])
         c[i, j] = gCov(evals, evecs, i, j)
     return c
 
-
+#@nb.njit()
 def con_c(evals, evecs, c, row, col):
-    # from pythranFuncs import cov
     n_d = int(evecs.shape[0] / 3)
     n_e = evals.shape[0]
 
@@ -463,7 +500,7 @@ def con_c(evals, evecs, c, row, col):
     return c
 
 
-# @nb.njit()
+#@nb.njit()
 def con_d(c, d, row, col):
     for k in range(row.shape[0]):
         i, j = (row[k], col[k])
