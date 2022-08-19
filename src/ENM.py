@@ -190,7 +190,7 @@ def backbonePrody(calphas, kirch, k, s):
 
 
 def betaCarbonModel(calphas):
-    from settings import cutoff, d2, fanm, backboneStrength, backboneConnect, bblen
+    from settings import cutoff, d2, fanm, backboneStrength, backboneConnect, bblen, model
     from sklearn.neighbors import BallTree, radius_neighbors_graph
     from scipy import sparse
     coords = calphas.getCoords()
@@ -279,7 +279,8 @@ def betaCarbonModel(calphas):
     check_symmetric(hab, raise_exception=True, tol=1e-5)
     from settings import aaGamma, bbGamma, abGamma
     print(kirch.shape, kbb.shape, kab.shape)
-    hess = aaGamma*haa + bbGamma*hbb + abGamma*hab/2
+    hess = aaGamma*haa + bbGamma*hbb + abGamma*hab
+
     kirchoff = kirch * aaGamma + kbb * bbGamma + kab * abGamma
     check_symmetric(hess, raise_warning=True, tol=1e-5)
     print(hess.data)

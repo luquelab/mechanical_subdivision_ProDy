@@ -30,7 +30,8 @@ def springFit(bfactors, sqFlucts):
     #a = springFit2(bfactors, sqFlucts)
     huber = HuberRegressor(fit_intercept=False, tol=0).fit(sqFlucts, bfactors)
     a = huber.coef_
-    return a
+    r2 = huber.score(a*sqFlucts, bfactors)
+    return a, r2
 
 
 
@@ -39,29 +40,32 @@ def fluctFit(evals, evecs, bfactors):
     coeffs = []
     ks = []
     flucts = []
+    r2s = []
     from settings import n_modes
     minModes = int(0.1*n_modes)
     if fitmodes:
         for n_modes in range(len(evals)):
             if n_modes < minModes:
                 continue
-            c, k, fluct = costFunc(evals, evecs, bfactors, n_modes)
+            c, k, fluct, r2 = costFunc(evals, evecs, bfactors, n_modes)
             coeffs.append(c)
             ks.append(k)
             flucts.append(fluct)
+            r2s.append(r2)
         nModes = np.argmax(coeffs)+1
         coeff = np.max(coeffs)
         kbest = ks[nModes-1]
         fluct = flucts[nModes-1]
+        r2 = r2s[nModes-1]
         err = standardError(bfactors, fluct, kbest)
         #err = confidenceInterval(bfactors, err)
-        return int(nModes+minModes), coeff, kbest[0], fluct, err
+        return int(nModes+minModes), coeff, kbest[0], fluct, err, r2
     else:
         n_modes = evals.shape[0]
-        c, k, fluct = costFunc(evals, evecs, bfactors, n_modes)
+        c, k, fluct, r2 = costFunc(evals, evecs, bfactors, n_modes)
         err = standardError(bfactors, fluct, k)
         #err = confidenceInterval(bfactors, err)
-        return n_modes, c, k[0], fluct, err
+        return n_modes, c, k[0], fluct, err, r2
 
 
 # @nb.njit()
@@ -71,10 +75,10 @@ def costFunc(evals, evecs, bfactors, n_modes):
     if sqFlucts.shape[0] != bfactors.shape[0]:
         sqFlucts = np.reshape(sqFlucts, (-1, 3)).sum(axis=-1)
 
-    k = springFit(bfactors, sqFlucts[:,np.newaxis])
+    k, r2 = springFit(bfactors, sqFlucts[:,np.newaxis])
     scaledFlucts = k*sqFlucts
     c = np.corrcoef(bfactors,scaledFlucts)[1,0]
-    return c, k, scaledFlucts
+    return c, k, scaledFlucts, r2
 
 def standardError(bfactors, sqFlucts, k):
     n = bfactors.shape[0]

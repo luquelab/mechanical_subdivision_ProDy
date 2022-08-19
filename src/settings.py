@@ -14,7 +14,7 @@ mode = 'full'
 # pdbx: true or false, whether the pdb uses the pdbx/mmcif format
 
 global pdb, pdbx
-pdb = '7s20'
+pdb = '7mh2'
 pdbx = False
 
 # Model Parameters
@@ -29,20 +29,20 @@ pdbx = False
 
 global model, fanm, cbeta, aaGamma, bbGamma, abGamma, cutoff, d2, flexibilities, backboneStrength, bblen
 model = 'anm'
-cutoff = 7
+cutoff = 7.5
 
-fanm = 1
+fanm = 0.1
 d2 = False
 flexibilities = False
 
 backboneConnect = True
-backboneStrength = 2
+backboneStrength = 1
 bblen = 3
 
 cbeta = True
-aaGamma = 1
-bbGamma = 1/4
-abGamma = 1/2
+aaGamma = 3
+bbGamma = 1
+abGamma = 1
 
 # NMA Options
 # n_modes: Number of low frequency modes to calculate
@@ -54,7 +54,7 @@ abGamma = 1/2
 #     'lobcuda' - GPU accelerated lobpcg through the cupy package, requires a cuda implementation
 
 global n_modes, fitmodes, eigmethod
-n_modes = 300
+n_modes = 500
 fitmodes = False
 eigmethod = 'lobcuda'
 

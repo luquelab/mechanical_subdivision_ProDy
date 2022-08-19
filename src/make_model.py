@@ -95,7 +95,7 @@ def getPDBx(pdb):
     pdbx_file = pdbx.PDBxFile()
     pdbx_file.read(file_name)
     capsid = pdbx.get_assembly(pdbx_file, assembly_id="1", model=1, extra_fields=['b_factor'])
-    title = pdbx_file.get_category('pdbx_database_related')['details']
+    title = pdb #pdbx_file.get_category('pdbx_database_related')['details']
     print("Number of protein chains:", struc.get_chain_count(capsid))
     calphas = capsid[capsid.atom_name == 'CA']
     coords = calphas.coord
@@ -192,23 +192,18 @@ def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model):
         evals = evals[6:]
         evecs = evecs[:, 6:]
     elif eigmethod == 'lobcuda':
-        from pyamg import smoothed_aggregation_solver
         import cupy as cp
         from cupyx.scipy.sparse.linalg import lobpcg as clobpcg
-        from cupyx.scipy.sparse.linalg import aslinearoperator, LinearOperator, spilu
-        #ml = smoothed_aggregation_solver(mat)
-        #ml = ml.aspreconditioner()
-        #ml = aslinearoperator(ml)
-        #m = lambda b : ml.matvec(cp.asnumpy(b))
+        from cupyx.scipy.sparse.linalg import LinearOperator, spilu
+
         sparse_gpu = cp.sparse.csr_matrix(mat.astype(cp.float32))
         epredict = cp.random.rand(n_dim, n_modes + 6, dtype = cp.float32)
-        #M = aslinearoperator(ml)
-        #M = LinearOperator(sparse_gpu.shape, ml)
-        #lu = sparse.linalg.splu(mat)
-        lu = spilu(sparse_gpu, fill_factor=10)  # LU decomposition
+
+        lu = spilu(sparse_gpu, fill_factor=50)  # LU decomposition
         M = LinearOperator(mat.shape, lu.solve)
         print('gpu eigen')
-        evals, evecs = clobpcg(sparse_gpu, epredict,  largest=False, tol=0, verbosityLevel=0)
+
+        evals, evecs = clobpcg(sparse_gpu, epredict, M=M,  largest=False, tol=0, verbosityLevel=0)
         if model=='anm':
             evals = cp.asnumpy(evals[6:])
             evecs = cp.asnumpy(evecs[:, 6:])
@@ -343,7 +338,7 @@ def mechanicalProperties(bfactors, evals, evecs, title):
     print(evecs.shape)
 
     print('Plotting')
-    nModes, coeff, k, sqFlucts, stderr = fluctFit(evals, evecs, bfactors)
+    nModes, coeff, k, sqFlucts, stderr, r2 = fluctFit(evals, evecs, bfactors)
     # icoEvPlot(evals, evecs, sqFlucts, title)
 
     fig, ax = plt.subplots(1, 1, figsize=(10, 5))
@@ -375,7 +370,7 @@ def mechanicalProperties(bfactors, evals, evecs, title):
     ax.legend()
     fig.suptitle(
         'Squared Fluctuations vs B-factors: '  + ' (' + pdb + ')' + "\n" + r' $\gamma = $' + "{:.5f}".format(
-            gamma) +  r'$\pm$' + "{:.5f}".format(ci) + r' $k_{b}T/Å^{2}$' + '  CC = ' + "{:.5f}".format(coeff), fontsize=12)
+            gamma) +  r'$\pm$' + "{:.5f}".format(ci) + r' $k_{b}T/Å^{2}$' + '  CC = ' + "{:.5f}".format(coeff)  + '  r2 = ' + "{:.5f}".format(r2), fontsize=12)
     # fig.suptitle('# Modes: ' + str(nModes) + ' Corr. Coeff: ' + str(coeff) + ' Spring Constant: ' + str(gamma), fontsize=16)
     # fig.tight_layout()
     plt.savefig('../results/subdivisions/' + pdb + '_sqFlucts.svg')

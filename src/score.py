@@ -278,6 +278,65 @@ def globalPressure(coords, hess, gamma):
 
     return bulkmod
 
+def volFlucts(coords, evals, evecs, gamma):
+    from scipy.spatial import ConvexHull
+
+    print(coords.shape)
+    n_atoms = coords.shape[0]
+    centroid = coords.mean(axis=0)
+    print(centroid.shape)
+    coords += centroid
+    hull = ConvexHull(coords)
+    vol = hull.volume
+    print('vol', vol)
+    scoords = coordToSphere(coords)
+    sevecsp = sphereEigs(coords, evecs)
+    sevecsm = sphereEigs(coords, -evecs)
+    rmean = scoords[:,0].mean()
+    for i in range(len(evals)):
+        r1 = sevecsp[:,0,i].mean()
+
+        r2 = sevecsm[:,0,i].mean()
+        #drmean =
+
+
+
+    return vol
+
+
+@nb.njit()
+def sphereEigs(coords, evecs):
+    ne = evecs.shape[-1]
+    na = coords.shape[0]
+    sevecs = np.empty((na, 3, ne))
+    evecs = evecs.reshape((na, 3, ne))
+    for i in range(ne):
+        for j in range(na):
+            v = evecs[j,:,i]
+            pos = coords[j,:]
+            sevecs[j,:,i] = sphereDelta(pos, v)
+
+    return sevecs
+
+@nb.njit()
+def coordToSphere(coords):
+    scoords = np.empty_like(coords)
+    n = coords.shape[0]
+    for i in nb.prange(n):
+        scoords[i,:] = cartToSphere(coords[i,:])
+
+@nb.njit()
+def sphereDelta(pos, vec):
+    return cartToSphere(pos+vec) - cartToSphere(pos)
+
+@nb.njit()
+def cartToSphere(vec):
+    r = np.linalg.norm(vec)
+    az = np.arctan2(vec[0],vec[1])
+    pol = np.arccos(vec[2]/r)
+    return np.array([r, az, pol])
+
+
 def parabola(x, b):
     return 1/2*b*x**2
 
