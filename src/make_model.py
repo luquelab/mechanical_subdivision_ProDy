@@ -48,13 +48,18 @@ def make_model():
 
 
 def getPDB(pdb):
-    from settings import pdbx
-    os.chdir('../data/capsid_pdbs')
+    from settings import pdbx, local
+
+    dir = '../data/capsid_pdbs/'
+
     if pdbx:
-        filename = pdb + '_full.cif'
+        filename = dir + pdb + '_full.cif'
     else:
-        filename = pdb + '_full.pdb'
-    if not os.path.exists(filename):
+        filename = dir + pdb + '_full.pdb'
+
+    if os.path.exists(filename) or local:
+        pass
+    else:
         pdb_url = 'https://files.rcsb.org/download/' + pdb
         if pdbx:
             pdb_url = pdb_url + '.cif.gz'
@@ -78,11 +83,12 @@ def getPDB(pdb):
     capsid = addNodeID(capsid)
     calphas = capsid.select('protein and name CA')
     print('Number Of Residues: ', calphas.getCoords().shape[0])
-    os.chdir('../../src')
 
-    writePDB('../results/subdivisions/' + pdb + '_ca_prot.pdb', calphas,
-             hybrid36=True)
-    title = header['title']
+
+    if 'title' in header:
+        title = header['title']
+    else:
+        title = pdb
 
     return capsid, calphas, title, header
 

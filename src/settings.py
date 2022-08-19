@@ -7,15 +7,16 @@
 #     clustering - start from an already computed clustering (rigidity analysis and plotting)
 
 global mode
-mode = 'full'
+mode = 'hess'
 
 # PDB variables
 # pdb: The protein databank id for downloading the file
 # pdbx: true or false, whether the pdb uses the pdbx/mmcif format
 
-global pdb, pdbx
-pdb = '7mh2'
+global pdb, pdbx, local
+pdb = 'patience'
 pdbx = False
+local = True
 
 # Model Parameters
 # model: Anisotropic or Gaussian Network Model
@@ -28,18 +29,18 @@ pdbx = False
 # flexibilities: Whether to use b-factors from the pdb to estimate pairwise spring constants
 
 global model, fanm, cbeta, aaGamma, bbGamma, abGamma, cutoff, d2, flexibilities, backboneStrength, bblen
-model = 'anm'
+model = 'gnm'
 cutoff = 7.5
 
 fanm = 0.1
-d2 = False
+d2 = True
 flexibilities = False
 
 backboneConnect = True
 backboneStrength = 1
 bblen = 3
 
-cbeta = True
+cbeta = False
 aaGamma = 3
 bbGamma = 1
 abGamma = 1
@@ -54,9 +55,9 @@ abGamma = 1
 #     'lobcuda' - GPU accelerated lobpcg through the cupy package, requires a cuda implementation
 
 global n_modes, fitmodes, eigmethod
-n_modes = 500
+n_modes = 200
 fitmodes = False
-eigmethod = 'lobcuda'
+eigmethod = 'eigsh'
 
 # Clustering Options
 # cluster_method: Method of determining quasi-rigid clusters from spectral embedding

@@ -74,7 +74,7 @@ def skembedding(n_evecs, sims):
     print('Performing Spectral Embedding')
     from scipy.sparse.csgraph import connected_components
     print(connected_components(sims))
-    X_transformed= spectral_embedding(sims, n_components=n_evecs, drop_first=False, eigen_solver = 'amg', norm_laplacian=False)
+    X_transformed= spectral_embedding(sims, n_components=n_evecs, drop_first=False, eigen_solver = 'arpack', norm_laplacian=True)
     print('Memory Usage: ', psutil.virtual_memory().percent)
     return X_transformed
 
