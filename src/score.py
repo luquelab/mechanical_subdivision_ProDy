@@ -3,36 +3,46 @@ import numpy as np
 import numba as nb
 from sklearn.metrics import pairwise_distances
 
+@nb.njit()
 def calcCentroids(X, labels, n_clusters):
-    centroids = []
+    centroids = np.zeros((labels.shape[0], n_clusters))
+    n = n_clusters
     for i in range(n_clusters):
         mask = (labels==i)
         if not np.any(mask):
-            print('Some clusters unassigned')
-            centroids.append((np.random.rand(n_clusters)))
-            #return np.array(centroids), True
+            n += -1
+            centroids[i,:] = np.random.rand(n_clusters)
         else:
             clust = X[mask,:]
             cent = np.mean(clust, axis=0)
-            centroids.append(cent)
+            centroids[i,:] = cent
 
-    return np.array(centroids), False
+    if n != n_clusters:
+        print('Some clusters unassigned')
+        print('Assigned Clusters: ', n)
 
+    return np.array(centroids)
+
+@nb.njit()
 def calcCosCentroids(X, labels, n_clusters):
-    centroids = []
+    centroids = np.zeros((n_clusters, n_clusters))
+    n = n_clusters
     for i in range(n_clusters):
         mask = (labels==i)
         if not np.any(mask):
-            print('Some clusters unassigned')
-            centroids.append((np.random.rand(n_clusters)))
-            #return np.array(centroids), True
+            n += -1
+            centroids[i,:] = np.random.rand(n_clusters)
         else:
             clust = X[mask,:]
             c = np.sum(clust, axis=0)
             cent = c/np.linalg.norm(c)
-            centroids.append(cent)
+            centroids[i,:] = cent
 
-    return np.array(centroids), False
+    if n != n_clusters:
+        print('Some clusters unassigned')
+        print('Assigned Clusters: ', n)
+
+    return centroids
 
 
 # def discretize_score(coords, labels):
@@ -281,28 +291,49 @@ def globalPressure(coords, hess, gamma):
 def volFlucts(coords, evals, evecs, gamma):
     from scipy.spatial import ConvexHull
 
+    evals = evals*gamma
+
     print(coords.shape)
     n_atoms = coords.shape[0]
-    centroid = coords.mean(axis=0)
-    print(centroid.shape)
-    coords += centroid
+    #centroid = coords.mean(axis=0)
+    print(evecs.shape)
+    #coords += centroid
     hull = ConvexHull(coords)
     vol = hull.volume
     print('vol', vol)
-    scoords = coordToSphere(coords)
-    sevecsp = sphereEigs(coords, evecs)
-    sevecsm = sphereEigs(coords, -evecs)
-    rmean = scoords[:,0].mean()
+    v_rms = 0
+    vplot = np.zeros(len(evals))
+    vmodes = np.zeros(coords.shape[0])
+    h = 1
     for i in range(len(evals)):
-        r1 = sevecsp[:,0,i].mean()
+        vec = evecs[:,i].reshape(-1,3)
+        c1 = coords + h*vec
+        c2 = coords - h*vec
+        c3 = coords + 2*h * vec
+        c4 = coords - 2*h * vec
+        v1 = ConvexHull(c1).volume
+        v2 = ConvexHull(c2).volume
+        v3 = ConvexHull(c3).volume
+        v4 = ConvexHull(c4).volume
+        dv = (-v3 + 8*v1 - 8*v2 + v4)/(12*h)
+        #dv = (v1 - v2)/(2*h)
+        dvo = dv**2/evals[i]
+        vplot[i] = dvo
+        v_rms += dvo
+        vmodes += np.sum(vec*dvo, axis=1)
 
-        r2 = sevecsm[:,0,i].mean()
-        #drmean =
+    compressibility = v_rms/vol
 
+    print(np.max(vplot))
+    print(np.argmax(vplot))
 
+    return compressibility, v_rms, vplot, vmodes
 
-    return vol
-
+def solventVol(coords, radius):
+    n = coords.shape[0]*3
+    radii = [radius]*n
+    from freesasa import calcCoord
+    test = calcCoord(coords.flatten(), radii)
 
 @nb.njit()
 def sphereEigs(coords, evecs):
@@ -398,6 +429,19 @@ def corrDiags(evals, evecs, nev, nnodes):
             diags[j,:,:] += ev * np.outer(vec,vec)
     return diags
 
+@nb.njit()
+def scorrDiags(evals, evecs, nev, nnodes, coords):
+    diags = np.zeros((nnodes, 3, 3))
+    for i in range(nev):
+        eve = evecs[:,i]
+        ev = 1/evals[i]
+        for j in range(nnodes):
+            vec = eve[3*j:3*j+3]
+            c = coords[j]
+            svec = sphereDelta(c, vec)
+            diags[j,:,:] += ev * np.outer(svec,svec)
+    return diags
+
 
 #@nb.njit()
 def residueCorrEigs(evals, evecs):
@@ -421,3 +465,70 @@ def corrStrains(coords, evals, evecs, pdb):
     sVals, pVecs = residueCorrEigs(evals, evecs)
     np.savez_compressed(pdb + 'pvecs.npz', svals = sVals, pvecs = pVecs, coords=coords)
     return sVals, pVecs
+
+#@nb.njit()
+def sphereTransformMat(vec):
+    svec = cartToSphere(vec)
+    r, phi, theta = svec
+
+    st = np.sin(theta)
+    sp = np.sin(phi)
+    ct = np.cos(theta)
+    cp = np.cos(phi)
+
+    mat = np.array([[st*cp,st*sp,ct],[ct*cp,ct*sp, -st],[-sp, cp, 0]])
+
+    print(mat)
+    print(svec, (mat @ (vec)/r)*r)
+    print(np.allclose(svec, mat @ vec))
+
+    return mat
+
+#@nb.njit()
+def sphereCrossCorr(cDiags, coords):
+    n = coords.shape[0]
+    sCCDiags = np.zeros((n,3,3))
+
+    for i in range(n):
+        diag = cDiags[i]
+        vec = coords[i]
+        mat = sphereTransformMat(vec)
+        sCCDiags[i] = mat @ diag @ mat.T
+
+    return sCCDiags
+
+def sphereCC(coords, evals, evecs, pdb):
+    nnodes = int(evecs.shape[0] / 3)
+    nev = evals.shape[0]
+    scDiags = scorrDiags(evals, evecs, nev, nnodes, coords)
+    #cDiags = corrDiags(evals, evecs, nev, nnodes)
+    #sCCDiags = sphereCrossCorr(cDiags, coords)
+    rFlucts = scDiags[:,0,0]
+    tFlucts = scDiags[:,1,1]
+    pFlucts = scDiags[:,2,2]
+
+    import matplotlib
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(3, 1, figsize=(10, 5))
+    font = {'family': 'sans-serif',
+            'weight': 'normal',
+            'size': 11}
+    matplotlib.rc('font', **font)
+
+    n_asym = int(nnodes / 60)
+    np.savez_compressed('../results/subdivisions/' + pdb + '_sCC.npz', scc = scDiags, rf = rFlucts)
+    ax[0].plot(np.arange(rFlucts.shape[0])[:int(n_asym)], rFlucts[:int(n_asym)], label='Radial Fluctuations')
+    ax[0].set_ylabel(r'$Å^{2}$', fontsize=12)
+    ax[1].plot(np.arange(tFlucts.shape[0])[:int(n_asym)], tFlucts[:int(n_asym)], label='Azimuthal Fluctuations')
+    ax[2].plot(np.arange(pFlucts.shape[0])[:int(n_asym)], pFlucts[:int(n_asym)], label='Polar Fluctuations')
+    ax[2].set_xlabel('Residue Number', fontsize=12)
+    ax[2].tick_params(axis='y', labelsize=8)
+    ax[2].tick_params(axis='x', labelsize=8)
+
+    #ax.legend()
+    fig.suptitle(
+        'Radial Fluctuations: ' + ' (' + pdb + ')', fontsize=12)
+
+    plt.savefig('../results/subdivisions/' + pdb + '_rFlucts.svg')
+    plt.savefig('../results/subdivisions/' + pdb + '_rFlucts.png')
+    plt.show()

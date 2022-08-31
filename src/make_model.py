@@ -1,4 +1,3 @@
-import cupy
 from prody import *
 import os
 import wget
@@ -21,8 +20,8 @@ def make_model():
         coords = calphas.getCoords()
         bfactors = calphas.getBetas()
 
+    m = np.sum(capsid.getMasses()) / coords.shape[0]
     print(title)
-    print('# Of Residues: ', coords.shape)
 
     if mode == 'full':
         hess, kirch = buildModel(pdb, calphas, coords, bfactors, cutoff)
@@ -39,16 +38,16 @@ def make_model():
         evals, evecs = modeCalc(pdb, hess, kirch, n_modes, eigmethod, model)
 
     evPlot(evals, evecs, title)
-    nm, gamma = mechanicalProperties(bfactors, evals, evecs, title)
+    nm, gamma = mechanicalProperties(bfactors, evals, evecs, title, coords, calphas, m)
 
-    distFlucts = distanceFlucts(evals, evecs, kirch, n_modes, title)
+    distFlucts = distanceFlucts(evals, evecs, kirch, n_modes, title, coords)
     sims = fluctToSims(distFlucts, pdb)
 
     # return -1
 
 
 def getPDB(pdb):
-    from settings import pdbx, local
+    from settings import pdbx, local, chains, chains_clust
 
     dir = '../data/capsid_pdbs/'
 
@@ -79,11 +78,19 @@ def getPDB(pdb):
         print(capsid)
     if type(capsid) is list:
         capsid = capsid[0]
-    capsid = capsid.select('protein').copy()
-    capsid = addNodeID(capsid)
-    calphas = capsid.select('protein and name CA')
+    ENM_capsid = capsid.select('protein').copy()
+    if chains:
+        ENM_capsid = ENM_capsid.select(chains)
+    ENM_capsid = addNodeID(ENM_capsid)
+    calphas = ENM_capsid.select('protein and name CA')
     print('Number Of Residues: ', calphas.getCoords().shape[0])
 
+
+    clustCapsid = capsid.select('protein')
+    if chains_clust:
+        clustCapsid = clustCapsid.select(chains_clust)
+    writePDB(dir + pdb + '_ca.pdb', calphas, hybrid36=True)
+    #writePDB(dir + pdb + '_capsid.pdb', clustCapsid, hybrid36=True)
 
     if 'title' in header:
         title = header['title']
@@ -180,11 +187,9 @@ def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model):
         mat.indices = perm.take(mat.indices)
         mat = mat.tocsr()
         print(perm)
-    useMass = False
     n_dim = mat.shape[0]
     if eigmethod == 'eigsh':
-        M = sparse.identity(n_dim)
-        evals, evecs = eigsh(mat, M=M, k=n_modes, sigma=1e-10 , which='LA')
+        evals, evecs = eigsh(mat, k=n_modes, sigma=1e-10, which='LA')
     elif eigmethod == 'lobpcg':
         from scipy.sparse.linalg import lobpcg
         from pyamg import smoothed_aggregation_solver
@@ -324,7 +329,7 @@ def icoEvPlot(evals, evecs, sqFlucts, title, coords):
     # writePDB(pdb + '_icomode.pdb', ensemble, beta=sqFlucts)
 
 
-def mechanicalProperties(bfactors, evals, evecs, title):
+def mechanicalProperties(bfactors, evals, evecs, title, coords, calphas, m):
     from settings import pdb
     import matplotlib
     import matplotlib.pyplot as plt
@@ -345,7 +350,23 @@ def mechanicalProperties(bfactors, evals, evecs, title):
 
     print('Plotting')
     nModes, coeff, k, sqFlucts, stderr, r2 = fluctFit(evals, evecs, bfactors)
-    # icoEvPlot(evals, evecs, sqFlucts, title)
+
+    boltz = 1.380649e-23
+    dalt = 6.022173643 * 10 ** 26
+    bz = boltz * 10 ** 20 * dalt
+    T_scale = 270
+    T_sim = 270
+
+    gamma = T_scale * bz * (8 * np.pi ** 2) / k
+
+    if model == 'anm':
+        gamma = gamma / 3
+
+    gamma = gamma * m  # average mass in daltons per residue
+    gcgs = 1.66054e-24
+    gamma_cgs = gamma*gcgs
+    print(gamma_cgs)
+    scale = T_sim * bz
 
     fig, ax = plt.subplots(1, 1, figsize=(10, 5))
     font = {'family': 'sans-serif',
@@ -353,13 +374,8 @@ def mechanicalProperties(bfactors, evals, evecs, title):
             'size': 11}
     matplotlib.rc('font', **font)
 
-    gamma = (8 * np.pi ** 2) / k
     stderr =  stderr/k
-
-    if model == 'anm':
-        gamma = gamma / 3
-
-    stderr = gamma * stderr
+    stderr = gamma_cgs * stderr
     from bfactorFit import confidenceInterval
     ci = confidenceInterval(bfactors, stderr)
 
@@ -375,35 +391,88 @@ def mechanicalProperties(bfactors, evals, evecs, title):
 
     ax.legend()
     fig.suptitle(
-        'Squared Fluctuations vs B-factors: '  + ' (' + pdb + ')' + "\n" + r' $\gamma = $' + "{:.5f}".format(
-            gamma) +  r'$\pm$' + "{:.5f}".format(ci) + r' $k_{b}T/Å^{2}$' + '  CC = ' + "{:.5f}".format(coeff)  + '  r2 = ' + "{:.5f}".format(r2), fontsize=12)
+        'Squared Fluctuations vs B-factors: '  + ' (' + pdb + ')' + "\n" + r' $\gamma = $' + "{:.3e}".format(
+            gamma_cgs) +  r'$\pm$' + "{:.3e}".format(ci) + r'$ \frac{dyn}{cm}$' + '  CC = ' + "{:.3f}".format(coeff), fontsize=12)
     # fig.suptitle('# Modes: ' + str(nModes) + ' Corr. Coeff: ' + str(coeff) + ' Spring Constant: ' + str(gamma), fontsize=16)
     # fig.tight_layout()
     plt.savefig('../results/subdivisions/' + pdb + '_sqFlucts.svg')
     plt.savefig('../results/subdivisions/' + pdb + '_sqFlucts.png')
     plt.show()
+
+    from score import volFlucts
+    compressibility, vrms, vplot, vmodes = volFlucts(coords, evals, evecs, gamma=gamma)
+    vflucts = np.sqrt(scale*vrms)
+    vplot = np.sqrt(scale*vplot)
+    print('volume fluctuations: ',vflucts, r'$Å^{3}$')
+
+    spa = 1e-10 * 6.022e26
+    betaT_pa = spa*compressibility*10e9
+    print()
+
+
+    fig, ax = plt.subplots(1, 1, figsize=(10, 5))
+    font = {'family': 'sans-serif',
+            'weight': 'normal',
+            'size': 11}
+    matplotlib.rc('font', **font)
+    print('Plotting compressibility by modes')
+    ax.set_ylabel(r'$\langle \Delta V \rangle Å^{3}$', fontsize=12)
+    ax.set_xlabel('# of low frequency modes', fontsize=12)
+    ax.tick_params(axis='y', labelsize=8)
+    ax.tick_params(axis='x', labelsize=8)
+    ax.legend()
+    fig.suptitle(
+        'Modes vs Volume Fluctuations: ' + ' (' + pdb + ')' + 'Isothermal Compressibility ' + r'$\beta_T$' + '=' + "{:.5f}".format(betaT_pa) + ' ' r'$GPa^{-1}$', fontsize=12)
+
+    # ax.scatter(np.arange(vplot.shape[0]), scale*vplot, marker='D', s=10, label='eigs')
+    ax.bar(np.arange(vplot.shape[0]), vplot)
+    ax.set_ylim([0,np.max(vplot)])
+    fig.tight_layout()
+    plt.savefig('../results/subdivisions/' + pdb + '_compressibility.png')
+    plt.show()
+    ind = np.argpartition(vplot, -5)[-5:]
+    compModes = evecs[:, ind]
+    print('Most significant compressibility mode:', np.argmax(vplot))
+    # from prody import ANM, writeNMD
+    # anm = ANM(pdb)
+    # anm._eigvals = evals
+    # anm._eigvecs = evecs
+    # anm._array = evecs
+    # anm._n_modes = evals.shape[0]
+    # anm._vars = 1 / evals
+    # anm._n_atoms = int(evecs.shape[0]/3)
+
+    #writeNMD(pdb + '_compress.nmd', anm[ind], calphas)
+
     return nModes, gamma
 
 
-def distanceFlucts(evals, evecs, kirch, n_modes, title):
+def distanceFlucts(evals, evecs, kirch, n_modes, title, coords):
     from scipy import sparse
-    from settings import model
+    from settings import model, d_cutoff
+    from sklearn.neighbors import BallTree, radius_neighbors_graph
+
     n_modes = int(n_modes)
     n_atoms = kirch.shape[0]
     print(n_modes)
     print('Direct Calculation Method')
-    kirch = kirch.tocoo()
+
+    tree = BallTree(coords)
+    adj = radius_neighbors_graph(tree, d_cutoff, mode='connectivity', n_jobs=-1)
+    adj = kirch.tocoo()
+
     covariance = sparse.lil_matrix((n_atoms, n_atoms))
     df = sparse.lil_matrix((n_atoms, n_atoms))
+
     if model == 'anm':
-        covariance = con_c(evals[:n_modes].copy(), evecs[:, :n_modes].copy(), covariance, kirch.row, kirch.col)
+        covariance = con_c(evals[:n_modes].copy(), evecs[:, :n_modes].copy(), covariance, adj.row, adj.col)
         covariance = covariance.tocsr()
     else:
-        covariance = gCon_c(evals[:n_modes].copy(), evecs[:, :n_modes].copy(), covariance, kirch.row, kirch.col)
+        covariance = gCon_c(evals[:n_modes].copy(), evecs[:, :n_modes].copy(), covariance, adj.row, adj.col)
         covariance = covariance.tocsr()
         print(covariance.min())
 
-    d = con_d(covariance, df, kirch.row, kirch.col)
+    d = con_d(covariance, df, adj.row, adj.col)
     d = d.tocsr()
     d.eliminate_zeros()
     print(d.min())

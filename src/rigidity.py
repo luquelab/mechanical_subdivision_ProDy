@@ -1,8 +1,12 @@
 def realFlucts(nc, labels):
     import numpy as np
     from make_model import getPDB
-    from settings import pdb, model, n_modes
+    from settings import pdb, model, n_modes, calc_rigidities
     from make_model import loadModes
+
+    if not calc_rigidities:
+        r = np.zeros_like(labels)
+        return r, r, r
 
     evals, evecs, kirch = loadModes(pdb, n_modes)
 

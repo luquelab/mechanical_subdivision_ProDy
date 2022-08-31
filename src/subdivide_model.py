@@ -107,19 +107,23 @@ def cluster_embedding(n_range, maps, method):
 
         print('Clusters: ' + str(n_clusters))
         print(method)
-        print('emshape', emb.shape)
         if method == 'discretize':
             # loop = True
             # while loop:
             label = discretize(emb)
-            #centroids, loop = calcCosCentroids(emb, label, n_clusters)
-            centroids, loop = calcCentroids(emb, label, n_clusters)
+            centroids = calcCosCentroids(emb, label, n_clusters)
+            #centroids, loop = calcCentroids(emb, label, n_clusters)
             inert = 0
         elif method == 'kmeans':
             #from sklearnex import patch_sklearn
             #patch_sklearn()
             centroids, label, inert, n_iter = k_means(emb, n_clusters=n_clusters, n_init=100, tol=0,
                                                   return_n_iter=True)
+        elif method == 'qr':
+            label = cluster_qr(emb)
+            centroids = calcCosCentroids(emb, label, n_clusters)
+            #centroids, loop = calcCentroids(emb, label, n_clusters)
+            inert = 0
         elif method == 'both':
             label = discretize(emb)
             centroids = calcCentroids(emb, label, n_clusters)
@@ -140,33 +144,31 @@ def cluster_embedding(n_range, maps, method):
         print('Scoring')
         from rigidity import realFlucts
         testScore = median_score(emb, centroids)
-
+        print('Score: ', testScore)
 
         scores.append(testScore)
         var, ntypes = cluster_types(label)
         variances.append(var)
         numtypes.append(ntypes)
         inerts.append(inert)
-        print('Memory Usage: ', psutil.virtual_memory().percent)
 
         print('Saving Results')
         nc = str(n_range[n])
         np.savez('../results/subdivisions/' + pdb + '/' + pdb + '_' + nc + '_results', labels=label, score=testScore,
                  var=var, ntypes=ntypes, n=n, method=cluster_method, inertia=inert)
 
-    best = np.argpartition(scores, -2)[-2:]  # indices of 3 best scores
-    for ind in best:
-        #rigidities, fullRigidities, mobilities = realFlucts(n_range[ind], labels[ind])
-        saveSubdivisions(labels[ind], n_range[ind], np.zeros_like(labels[ind]), np.zeros_like(labels[ind]), np.zeros_like(labels[ind]))
-
-    # for i, score in enumerate(scores):
-    #     if i <2 or i+2 >= len(scores):
-    #         continue
-    #     neighs = scores[i-2:i+2]
-    #     if np.all(score >= neighs):
+    #best = np.argpartition(scores, -2)[-2:]  # indices of 3 best scores
+    # for ind in best:
+    #     #rigidities, fullRigidities, mobilities = realFlucts(n_range[ind], labels[ind])
+    #     saveSubdivisions(labels[ind], n_range[ind], np.zeros_like(labels[ind]), np.zeros_like(labels[ind]), np.zeros_like(labels[ind]))
     #
-    #         rigidities, fullRigidities, mobilities = realFlucts(n_range[ind], labels[ind])
-    #         saveSubdivisions(labels[ind], n_range[ind], rigidities, fullRigidities, mobilities)
+    # for i, score in enumerate(scores):
+    #     if i <3 or i+3 >= len(scores):
+    #         continue
+    #     neighs = scores[i-3:i+3]
+    #     if np.all(score >= neighs):
+    #         rigidities, fullRigidities, mobilities = realFlucts(n_range[i], labels[i])
+    #         saveSubdivisions(labels[i], n_range[i], rigidities, fullRigidities, mobilities)
     #     else:
     #         continue
 
@@ -333,5 +335,31 @@ def discretize(
                 rotation = np.dot(Vh.T, U.T)
 
     if not has_converged:
-        raise LinAlgError("SVD did not converge")
+        raise LinAlgError("SVD did not conve    rge")
     return labels
+
+def cluster_qr(vectors):
+    from scipy.linalg import svd, qr
+    """Find the discrete partition closest to the eigenvector embedding.
+        This implementation was proposed in [1]_.
+    .. versionadded:: 1.1
+        Parameters
+        ----------
+        vectors : array-like, shape: (n_samples, n_clusters)
+            The embedding space of the samples.
+        Returns
+        -------
+        labels : array of integers, shape: n_samples
+            The cluster labels of vectors.
+        References
+        ----------
+        .. [1] :doi:`Simple, direct, and efficient multi-way spectral clustering, 2019
+            Anil Damle, Victor Minden, Lexing Ying
+            <10.1093/imaiai/iay008>`
+    """
+
+    k = vectors.shape[1]
+    _, _, piv = qr(vectors.T, pivoting=True)
+    ut, _, v = svd(vectors[piv[:k], :].T)
+    vectors = abs(np.dot(vectors, np.dot(ut, v.conj())))
+    return vectors.argmax(axis=1)

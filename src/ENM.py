@@ -29,7 +29,7 @@ def buildENM(calphas, coords, bfactors):
     kirch.sum_duplicates()
     kirch = kirch.tocsr()
     #print(kirch.data)
-    print('kirch: ', kirch.diagonal(k=0))
+    #print('kirch: ', kirch.diagonal(k=0))
 
     if model=='anm':
         kc = kirch.tocoo().copy()
@@ -313,6 +313,7 @@ def betaCarbonModel(calphas):
     plt.colorbar(mat, ax=ax)
     plt.show()
     checkHessStrength(kirchoff, hess)
+
 
     return kirchoff, hess
 

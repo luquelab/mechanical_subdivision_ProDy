@@ -7,16 +7,18 @@
 #     clustering - start from an already computed clustering (rigidity analysis and plotting)
 
 global mode
-mode = 'hess'
+mode = 'full'
 
 # PDB variables
 # pdb: The protein databank id for downloading the file
 # pdbx: true or false, whether the pdb uses the pdbx/mmcif format
+# chains: chains to include in NMA/ENM
 
-global pdb, pdbx, local
-pdb = 'patience'
+global pdb, pdbx, local, chains
+pdb = '6c21'
 pdbx = False
-local = True
+local = False
+chains = ''
 
 # Model Parameters
 # model: Anisotropic or Gaussian Network Model
@@ -29,18 +31,18 @@ local = True
 # flexibilities: Whether to use b-factors from the pdb to estimate pairwise spring constants
 
 global model, fanm, cbeta, aaGamma, bbGamma, abGamma, cutoff, d2, flexibilities, backboneStrength, bblen
-model = 'gnm'
+model = 'anm'
 cutoff = 7.5
 
 fanm = 0.1
-d2 = True
+d2 = False
 flexibilities = False
 
 backboneConnect = True
-backboneStrength = 1
+backboneStrength = 3
 bblen = 3
 
-cbeta = False
+cbeta = True
 aaGamma = 3
 bbGamma = 1
 abGamma = 1
@@ -55,9 +57,12 @@ abGamma = 1
 #     'lobcuda' - GPU accelerated lobpcg through the cupy package, requires a cuda implementation
 
 global n_modes, fitmodes, eigmethod
-n_modes = 200
+n_modes = 1800
 fitmodes = False
 eigmethod = 'eigsh'
+
+# Distance Fluctuation Options
+d_cutoff = 15
 
 # Clustering Options
 # cluster_method: Method of determining quasi-rigid clusters from spectral embedding
@@ -67,9 +72,11 @@ eigmethod = 'eigsh'
 # scoreMethod: How to calculate the cluster quality scores
 #     'mean' - use the mean value of the scores of each residue
 #     'median' - - use the median value of the scores of each residue
-global cluster_method, scoreMethod, cluster_start, cluster_stop, cluster_step
+global cluster_method, scoreMethod, cluster_start, cluster_stop, cluster_step, calc_rigidities, chains_clust
 cluster_method = 'discretize'
 scoreMethod = 'mean'
 cluster_start = 12
-cluster_stop = 94
+cluster_stop = 500
 cluster_step = 2
+calc_rigidities = False
+chains_clust = ''
