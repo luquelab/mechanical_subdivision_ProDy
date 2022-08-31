@@ -110,6 +110,8 @@ def getPDBx(pdb):
     capsid = pdbx.get_assembly(pdbx_file, assembly_id="1", model=1, extra_fields=['b_factor'])
     title = pdb #pdbx_file.get_category('pdbx_database_related')['details']
     print("Number of protein chains:", struc.get_chain_count(capsid))
+    capsid = capsid[capsid.filter_amino_acids()].copy()
+    strucio.save_structure( '../data/capsid_pdbs/'  + pdb + '_full.cif', capsid)
     calphas = capsid[capsid.atom_name == 'CA']
     coords = calphas.coord
     return capsid, calphas, coords, calphas.b_factor, title
