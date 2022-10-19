@@ -28,10 +28,15 @@ def springFit(bfactors, sqFlucts):
     from sklearn.linear_model import HuberRegressor
     #a, _, _, _ = np.linalg.lstsq(sqFlucts, bfactors)
     #a = springFit2(bfactors, sqFlucts)
-    huber = HuberRegressor(fit_intercept=False, tol=0).fit(sqFlucts, bfactors)
+    huber = HuberRegressor(fit_intercept=False, tol=0, alpha=0.0).fit(sqFlucts, bfactors)
     a = huber.coef_
+    b = huber.intercept_
+    # outliers = huber.outliers_
+    # residuals = np.sum((bfactors[~outliers] - a*sqFlucts[~outliers]) ** 2)
+    # r2 = 1 - residuals / (np.sum((bfactors - bfactors.mean()) ** 2))
+    # print(r2)
     r2 = huber.score(a*sqFlucts, bfactors)
-    return a, r2
+    return a, r2, b
 
 
 
@@ -75,8 +80,8 @@ def costFunc(evals, evecs, bfactors, n_modes):
     if sqFlucts.shape[0] != bfactors.shape[0]:
         sqFlucts = np.reshape(sqFlucts, (-1, 3)).sum(axis=-1)
 
-    k, r2 = springFit(bfactors, sqFlucts[:,np.newaxis])
-    scaledFlucts = k*sqFlucts
+    k, r2, b = springFit(bfactors, sqFlucts[:,np.newaxis])
+    scaledFlucts = k*sqFlucts + b
     c = np.corrcoef(bfactors,scaledFlucts)[1,0]
     return c, k, scaledFlucts, r2
 

@@ -10,16 +10,15 @@ if __name__ == '__main__':
     from subdivide_model import subdivide_model
     from settings import *
     import time
-    #from memory_profiler import memory_usage
+    from memory_profiler import memory_usage
 
     print('Performing NMA and Quasi-Rigid Cluster Identification for PDB entry: ' + pdb)
 
     start = time.time()
 
     if (mode =='full') or (mode =='hess') or (mode =='eigs'):
-        #mem_usage = memory_usage( make_model)
-        #print('Peak memory usage: ', max(mem_usage))
-        make_model()
+        mem_usage = memory_usage(make_model)
+        print('Peak memory usage: ', max(mem_usage))
         subdivide_model()
     elif (mode =='similarities') or (mode =='embedding') or (mode =='clustering'):
         subdivide_model()

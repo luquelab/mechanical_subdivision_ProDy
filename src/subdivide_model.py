@@ -112,7 +112,7 @@ def cluster_embedding(n_range, maps, method):
             # while loop:
             label = discretize(emb)
             centroids = calcCosCentroids(emb, label, n_clusters)
-            #centroids, loop = calcCentroids(emb, label, n_clusters)
+            #centroids = calcCentroids(emb, label, n_clusters)
             inert = 0
         elif method == 'kmeans':
             #from sklearnex import patch_sklearn

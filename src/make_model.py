@@ -89,8 +89,13 @@ def getPDB(pdb):
     clustCapsid = capsid.select('protein')
     if chains_clust:
         clustCapsid = clustCapsid.select(chains_clust)
-    writePDB(dir + pdb + '_ca.pdb', calphas, hybrid36=True)
-    #writePDB(dir + pdb + '_capsid.pdb', clustCapsid, hybrid36=True)
+
+    if not os.path.exists(dir + pdb + '_ca.pdb'):
+        print('Writing calphas PDB')
+        writePDB(dir + pdb + '_ca.pdb', calphas, hybrid36=True)
+    if not os.path.exists(dir + pdb + '_capsid.pdb'):
+        print('Writing complete capsid PDB')
+        writePDB(dir + pdb + '_capsid.pdb', clustCapsid, hybrid36=True)
 
     if 'title' in header:
         title = header['title']
@@ -353,6 +358,8 @@ def mechanicalProperties(bfactors, evals, evecs, title, coords, calphas, m):
     print('Plotting')
     nModes, coeff, k, sqFlucts, stderr, r2 = fluctFit(evals, evecs, bfactors)
 
+
+
     boltz = 1.380649e-23
     dalt = 6.022173643 * 10 ** 26
     bz = boltz * 10 ** 20 * dalt
@@ -382,10 +389,10 @@ def mechanicalProperties(bfactors, evals, evecs, title, coords, calphas, m):
     ci = confidenceInterval(bfactors, stderr)
 
     print(nModes, coeff, gamma)
-    n_asym = int(bfactors.shape[0]/60)
+    n_asym = int(bfactors.shape[0])
     np.savez('../results/subdivisions/' + pdb + '_sqFlucts.npz', sqFlucts=sqFlucts, bf=bfactors, k=k, cc=coeff, nModes=nModes)
-    ax.plot(np.arange(bfactors.shape[0])[:int(n_asym)], bfactors[:int(n_asym)], label='B-factors')
-    ax.plot(np.arange(sqFlucts.shape[0])[:int(n_asym)], sqFlucts[:int(n_asym)], label='Squared Fluctuations')
+    ax.plot(np.arange(bfactors.shape[0])[:n_asym], bfactors[:n_asym], label='B-factors')
+    ax.plot(np.arange(sqFlucts.shape[0])[:n_asym], sqFlucts[:n_asym], label='Squared Fluctuations')
     ax.set_ylabel(r'$Å^{2}$', fontsize=12)
     ax.set_xlabel('Residue Number', fontsize=12)
     ax.tick_params(axis='y', labelsize=8)
@@ -394,57 +401,74 @@ def mechanicalProperties(bfactors, evals, evecs, title, coords, calphas, m):
     ax.legend()
     fig.suptitle(
         'Squared Fluctuations vs B-factors: '  + ' (' + pdb + ')' + "\n" + r' $\gamma = $' + "{:.3e}".format(
-            gamma_cgs) +  r'$\pm$' + "{:.3e}".format(ci) + r'$ \frac{dyn}{cm}$' + '  CC = ' + "{:.3f}".format(coeff), fontsize=12)
+            gamma_cgs) +  r'$\pm$' + "{:.3e}".format(ci) + r'$ \frac{dyn}{cm}$' + '  CC = ' + "{:.3f}".format(coeff) + '  r2 = ' + "{:.3f}".format(r2), fontsize=12)
     # fig.suptitle('# Modes: ' + str(nModes) + ' Corr. Coeff: ' + str(coeff) + ' Spring Constant: ' + str(gamma), fontsize=16)
     # fig.tight_layout()
     plt.savefig('../results/subdivisions/' + pdb + '_sqFlucts.svg')
     plt.savefig('../results/subdivisions/' + pdb + '_sqFlucts.png')
     plt.show()
 
-    from score import volFlucts
-    compressibility, vrms, vplot, vmodes = volFlucts(coords, evals, evecs, gamma=gamma)
-    vflucts = np.sqrt(scale*vrms)
-    vplot = np.sqrt(scale*vplot)
-    print('volume fluctuations: ',vflucts, r'$Å^{3}$')
-
-    spa = 1e-10 * 6.022e26
-    betaT_pa = spa*compressibility*10e9
-    print()
-
-
-    fig, ax = plt.subplots(1, 1, figsize=(10, 5))
+    fig, ax = plt.subplots(1, 1, figsize=(6, 6))
     font = {'family': 'sans-serif',
             'weight': 'normal',
             'size': 11}
     matplotlib.rc('font', **font)
-    print('Plotting compressibility by modes')
-    ax.set_ylabel(r'$\langle \Delta V \rangle Å^{3}$', fontsize=12)
-    ax.set_xlabel('# of low frequency modes', fontsize=12)
+
+    ax.scatter(sqFlucts, bfactors, label='B-factors')
+    ax.set_ylabel(r'$Å^{2}$', fontsize=12)
+    ax.set_xlabel('Residue Number', fontsize=12)
     ax.tick_params(axis='y', labelsize=8)
     ax.tick_params(axis='x', labelsize=8)
+
     ax.legend()
-    fig.suptitle(
-        'Modes vs Volume Fluctuations: ' + ' (' + pdb + ')' + 'Isothermal Compressibility ' + r'$\beta_T$' + '=' + "{:.5f}".format(betaT_pa) + ' ' r'$GPa^{-1}$', fontsize=12)
 
-    # ax.scatter(np.arange(vplot.shape[0]), scale*vplot, marker='D', s=10, label='eigs')
-    ax.bar(np.arange(vplot.shape[0]), vplot)
-    ax.set_ylim([0,np.max(vplot)])
-    fig.tight_layout()
-    plt.savefig('../results/subdivisions/' + pdb + '_compressibility.png')
     plt.show()
-    ind = np.argpartition(vplot, -5)[-5:]
-    compModes = evecs[:, ind]
-    print('Most significant compressibility mode:', np.argmax(vplot))
-    # from prody import ANM, writeNMD
-    # anm = ANM(pdb)
-    # anm._eigvals = evals
-    # anm._eigvecs = evecs
-    # anm._array = evecs
-    # anm._n_modes = evals.shape[0]
-    # anm._vars = 1 / evals
-    # anm._n_atoms = int(evecs.shape[0]/3)
 
-    #writeNMD(pdb + '_compress.nmd', anm[ind], calphas)
+    if model=='anm':
+        from score import volFlucts
+        compressibility, vrms, vplot, vmodes = volFlucts(coords, evals, evecs, gamma=gamma)
+        vflucts = np.sqrt(scale*vrms)
+        vplot = np.sqrt(scale*vplot)
+        print('volume fluctuations: ',vflucts, r'$Å^{3}$')
+
+        spa = 1e-10 * 6.022e26
+        betaT_pa = spa*compressibility*10e9
+        print()
+
+
+        fig, ax = plt.subplots(1, 1, figsize=(10, 5))
+        font = {'family': 'sans-serif',
+                'weight': 'normal',
+                'size': 11}
+        matplotlib.rc('font', **font)
+        print('Plotting compressibility by modes')
+        ax.set_ylabel(r'$\langle \Delta V \rangle Å^{3}$', fontsize=12)
+        ax.set_xlabel('# of low frequency modes', fontsize=12)
+        ax.tick_params(axis='y', labelsize=8)
+        ax.tick_params(axis='x', labelsize=8)
+        ax.legend()
+        fig.suptitle(
+            'Modes vs Volume Fluctuations: ' + ' (' + pdb + ')' + 'Isothermal Compressibility ' + r'$\beta_T$' + '=' + "{:.5f}".format(betaT_pa) + ' ' r'$GPa^{-1}$', fontsize=12)
+
+        # ax.scatter(np.arange(vplot.shape[0]), scale*vplot, marker='D', s=10, label='eigs')
+        ax.bar(np.arange(vplot.shape[0]), vplot)
+        ax.set_ylim([0,np.max(vplot)])
+        fig.tight_layout()
+        plt.savefig('../results/subdivisions/' + pdb + '_compressibility.png')
+        plt.show()
+        ind = np.argpartition(vplot, -5)[-5:]
+        compModes = evecs[:, ind]
+        print('Most significant compressibility mode:', np.argmax(vplot))
+        # from prody import ANM, writeNMD
+        # anm = ANM(pdb)
+        # anm._eigvals = evals
+        # anm._eigvecs = evecs
+        # anm._array = evecs
+        # anm._n_modes = evals.shape[0]
+        # anm._vars = 1 / evals
+        # anm._n_atoms = int(evecs.shape[0]/3)
+
+        #writeNMD(pdb + '_compress.nmd', anm[ind], calphas)
 
     return nModes, gamma
 

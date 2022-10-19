@@ -1,3 +1,3 @@
 from score import plotScores
 import numpy as np
-plotScores('2e0z', np.arange(4,200,2), save=True)
+plotScores('6b23', np.arange(12,300,2), save=True)

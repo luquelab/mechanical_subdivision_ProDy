@@ -7,7 +7,7 @@
 #     clustering - start from an already computed clustering (rigidity analysis and plotting)
 
 global mode
-mode = 'full'
+mode = 'eigs'
 
 # PDB variables
 # pdb: The protein databank id for downloading the file
@@ -15,7 +15,7 @@ mode = 'full'
 # chains: chains to include in NMA/ENM
 
 global pdb, pdbx, local, chains
-pdb = '6c21'
+pdb = '2e0z'
 pdbx = False
 local = False
 chains = ''
@@ -31,19 +31,19 @@ chains = ''
 # flexibilities: Whether to use b-factors from the pdb to estimate pairwise spring constants
 
 global model, fanm, cbeta, aaGamma, bbGamma, abGamma, cutoff, d2, flexibilities, backboneStrength, bblen
-model = 'anm'
+model = 'gnm'
 cutoff = 7.5
 
-fanm = 0.1
-d2 = False
+fanm = 0.9
+d2 = True
 flexibilities = False
 
-backboneConnect = True
+backboneConnect = False
 backboneStrength = 3
 bblen = 3
 
-cbeta = True
-aaGamma = 3
+cbeta = False
+aaGamma = 2
 bbGamma = 1
 abGamma = 1
 
@@ -57,12 +57,12 @@ abGamma = 1
 #     'lobcuda' - GPU accelerated lobpcg through the cupy package, requires a cuda implementation
 
 global n_modes, fitmodes, eigmethod
-n_modes = 1800
+n_modes = 200
 fitmodes = False
-eigmethod = 'eigsh'
+eigmethod = 'lobcuda'
 
 # Distance Fluctuation Options
-d_cutoff = 15
+d_cutoff = 10
 
 # Clustering Options
 # cluster_method: Method of determining quasi-rigid clusters from spectral embedding
@@ -76,7 +76,7 @@ global cluster_method, scoreMethod, cluster_start, cluster_stop, cluster_step, c
 cluster_method = 'discretize'
 scoreMethod = 'mean'
 cluster_start = 12
-cluster_stop = 500
+cluster_stop = 300
 cluster_step = 2
 calc_rigidities = False
 chains_clust = ''
