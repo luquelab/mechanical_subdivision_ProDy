@@ -7,7 +7,7 @@ def buildENM(calphas, coords, bfactors):
     from scipy import sparse
     import numpy as np
     from sklearn.neighbors import BallTree, radius_neighbors_graph, kneighbors_graph
-    from settings import cbeta, backboneStrength, backboneConnect, bblen
+    from settings import cbeta, backboneStrength, backboneConnect, bblen, gfunc, baseDistance
 
     n_atoms = coords.shape[0]
     n_asym = int(n_atoms/60)
@@ -19,7 +19,7 @@ def buildENM(calphas, coords, bfactors):
     kirch = radius_neighbors_graph(tree, cutoff, mode='distance', n_jobs=-1)
     kc = kirch.tocoo().copy()
     kc.sum_duplicates()
-    kirch = kirchGamma(kc, bfactors, d2=d2, flexibilities=flexibilities, struct=False)
+
     if backboneConnect:
         kbb = backboneStrength
         kirch = backbonePrody(calphas, kirch.tolil(), kbb, s=bblen)
@@ -54,42 +54,40 @@ def buildENM(calphas, coords, bfactors):
 
 def buildMassesCoords(atoms):
     print(atoms[0])
-    coords = []
+    bfs = []
     masses = []
-    print('segments:', atoms.numSegments())
-    for seg in atoms.iterSegments():
-        for chain in seg.iterChains():
-            for res in chain.iterResidues():
-                mass = np.sum(res.getMasses())
-                masses.append(mass)
-                # if res.getResname() == 'GLY':
-                #     coord = np.mean(res.getCoords())
-                # else:
-                #     coord = res['CA'].getCoords()
-                coord = res['CA'].getCoords()
-                coords.append(coord)
 
-    return np.asarray(coords), np.asarray(masses)
+    #print('segments:', atoms.numSegments())
+
+    for chain in atoms.iterChains():
+        for res in chain.iterResidues():
+            mass = np.sum(res.getMasses())
+            masses.append(mass)
+
+            bfactor = np.mean(res.getBetas())
+            bfs.append(bfactor)
+
+            #coord = res['CA'].getCoords()
+            #coords.append(coord)
+
+    return np.asarray(bfs), np.asarray(masses)
+
 
 def kirchGamma(kirch, bfactors, **kwargs):
     kg = kirch.copy()
 
-    if 'd2' in kwargs and kwargs['d2']:
-        print('d2 mode')
-        kg.data = -1/((kg.data)**2)
-    else:
-        kg.data = -np.ones_like(kg.data)
+    if kwargs['gfunc'] == 'power':
+        kg.data = -1/((kg.data/kwargs['bd'])**kwargs['d2'])
+        print(kg.data)
+    elif kwargs['gfunc'] == 'exp':
+        kg.data = -np.exp(((kg.data/kwargs['bd']) ** kwargs['d2']))
+
 
     if 'flexibilities' in kwargs and kwargs['flexibilities']:
         flex = flexes(1/bfactors)
         fl = cooOperation(kirch.row, kirch.col, kirch.data, flexFunc, flex)
         kg.data = kg.data*fl
 
-    # if 'cbeta' in kwargs and kwargs['cbeta']:
-    #     names = atoms.getNames()
-    #     abgamma = np.array([0 if x == 'CA' else np.sqrt(0.5) for x in names])
-    #     abg = cooOperation(kirch.row, kirch.col, kirch.data, abFunc, abgamma)
-    #     kg.data = kg.data * abg
     return kg
 
 # @nb.njit()
@@ -190,7 +188,7 @@ def backbonePrody(calphas, kirch, k, s):
 
 
 def betaCarbonModel(calphas):
-    from settings import cutoff, d2, fanm, backboneStrength, backboneConnect, bblen, model
+    from settings import cutoff, d2, fanm, backboneStrength, backboneConnect, bblen, model, gfunc, baseDistance, d2
     from sklearn.neighbors import BallTree, radius_neighbors_graph
     from scipy import sparse
     coords = calphas.getCoords()
@@ -209,7 +207,7 @@ def betaCarbonModel(calphas):
     kc.sum_duplicates()
     kc.eliminate_zeros()
     bfactors = calphas.getBetas()
-    kirch = kirchGamma(kc, bfactors, d2=d2)
+    kirch = kirchGamma(kc, bfactors, d2=d2, flexibilities=flexibilities, gfunc=gfunc, bd= baseDistance)
     if backboneConnect:
         kbb = backboneStrength
         kirch = backbonePrody(calphas, kirch.tolil(), kbb, s=bblen)
@@ -223,7 +221,7 @@ def betaCarbonModel(calphas):
     btree = BallTree(betaCoords)
     betaKirch = radius_neighbors_graph(btree, cutoff, mode='distance',  n_jobs=-1).tocoo()
     betaKirch.eliminate_zeros()
-    betaKirch = kirchGamma(betaKirch.tocoo(), bfactors, d2=d2)
+    betaKirch  = kirchGamma(betaKirch.tocoo(), bfactors, d2=d2, flexibilities=flexibilities, gfunc=gfunc, bd= baseDistance)
     dg = np.array(betaKirch.sum(axis=0))
     betaKirch.setdiag(-dg[0])
     betaKirch = betaKirch.tocsr()
@@ -232,7 +230,7 @@ def betaCarbonModel(calphas):
     akdtree = KDTree(coords)
     bkdtree = KDTree(betaCoords)
     abKirch = akdtree.sparse_distance_matrix(bkdtree, cutoff).tocoo()
-    abKirch = kirchGamma(abKirch.tocoo(), bfactors, d2=d2)
+    abKirch = kirchGamma(abKirch.tocoo(), bfactors, d2=d2, flexibilities=flexibilities, gfunc=gfunc, bd= baseDistance)
     dg = np.array(abKirch.sum(axis=0))
     abKirch.setdiag(-dg[0])
     abKirch.eliminate_zeros()
@@ -615,13 +613,13 @@ def kirchChem(kirch, hbonds, sulfbonds, salts):
     kg.data = np.where(kg.data<=-1/(3**2), -100, kg.data)
     return kg
 
-def bondAngles(ivec, jvec, kvec):
-    rij = jvec - ivec
-    rjk = kvec - jvec
-    dij = np.linalg.norm(rij)
-    djk = np.linalg.norm(rij)
-    G = np.dot(rij, rjk) / (dij * djk)
-    rblock = np.zeros((3,3))
-    for i in range(3):
-        for j in range(3):
-            rblock[i,j]
+# def bondAngles(ivec, jvec, kvec):
+#     rij = jvec - ivec
+#     rjk = kvec - jvec
+#     dij = np.linalg.norm(rij)
+#     djk = np.linalg.norm(rij)
+#     G = np.dot(rij, rjk) / (dij * djk)
+#     rblock = np.zeros((3,3))
+#     for i in range(3):
+#         for j in range(3):
+#             rblock[i,j]

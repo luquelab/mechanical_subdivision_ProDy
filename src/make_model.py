@@ -16,11 +16,16 @@ def make_model():
     if pdbx:
         capsid, calphas, coords, bfactors, title = getPDBx(pdb)
     else:
-        capsid, calphas, title, header = getPDB(pdb)
+        capsid, calphas, title, header, masses, bfactors = getPDB(pdb)
         coords = calphas.getCoords()
+
         bfactors = calphas.getBetas()
 
-    m = np.sum(capsid.getMasses()) / coords.shape[0]
+        print('bf: ', bfactors.shape)
+        #bfactors = np.tile(bfactors, 60)
+        print('bf: ', bfactors.shape)
+
+    # m = np.sum(capsid.getMasses()) / coords.shape[0]
     print(title)
 
     if mode == 'full':
@@ -35,10 +40,10 @@ def make_model():
     if mode == 'eigs':
         evals, evecs, kirch = loadModes(pdb, n_modes)
     else:
-        evals, evecs = modeCalc(pdb, hess, kirch, n_modes, eigmethod, model)
+        evals, evecs = modeCalc(pdb, hess, kirch, n_modes, eigmethod, model, masses)
 
     evPlot(evals, evecs, title)
-    nm, gamma = mechanicalProperties(bfactors, evals, evecs, title, coords, calphas, m)
+    nm, gamma = mechanicalProperties(bfactors, evals, evecs, title, coords, calphas, 1)
 
     distFlucts = distanceFlucts(evals, evecs, kirch, n_modes, title, coords)
     sims = fluctToSims(distFlucts, pdb)
@@ -75,13 +80,24 @@ def getPDB(pdb):
         print(capsid.getTitle())
     else:
         capsid, header = parsePDB(filename, header=True, biomol=True, secondary=True, extend_biomol=True)
+        asym = parsePDB(filename)
         print(capsid)
     if type(capsid) is list:
         capsid = capsid[0]
     ENM_capsid = capsid.select('protein').copy()
+
+    from ENM import buildMassesCoords
+
+    bfactors, masses = buildMassesCoords(asym.select('protein').copy())
+
+    print(masses.shape)
+
     if chains:
         ENM_capsid = ENM_capsid.select(chains)
+
+
     ENM_capsid = addNodeID(ENM_capsid)
+
     calphas = ENM_capsid.select('protein and name CA')
     print('Number Of Residues: ', calphas.getCoords().shape[0])
 
@@ -102,7 +118,7 @@ def getPDB(pdb):
     else:
         title = pdb
 
-    return capsid, calphas, title, header
+    return capsid, calphas, title, header, masses, bfactors
 
 def getPDBx(pdb):
     import biotite.database.rcsb as rcsb
@@ -115,11 +131,12 @@ def getPDBx(pdb):
     capsid = pdbx.get_assembly(pdbx_file, assembly_id="1", model=1, extra_fields=['b_factor'])
     title = pdb #pdbx_file.get_category('pdbx_database_related')['details']
     print("Number of protein chains:", struc.get_chain_count(capsid))
-    capsid = capsid[capsid.filter_amino_acids()].copy()
-    strucio.save_structure( '../data/capsid_pdbs/'  + pdb + '_full.cif', capsid)
+    #capsid = capsid[capsid.filter_amino_acids()].copy()
+    #strucio.save_structure( '../data/capsid_pdbs/'  + pdb + '_full.cif', capsid)
     calphas = capsid[capsid.atom_name == 'CA']
     coords = calphas.coord
-    return capsid, calphas, coords, calphas.b_factor, title
+    bfactors = calphas.b_factor
+    return capsid, calphas, coords, bfactors, title
 
 
 def addNodeID(atoms):
@@ -129,6 +146,7 @@ def addNodeID(atoms):
     chid = 0
     ch0 = atoms[0].getChid()
     seg0 = atoms[0].getSegname()
+
     for at in atoms.iterAtoms():
         if at.getName() == 'CA':
             if at.getChid() == ch0 and at.getSegname() == seg0:
@@ -145,6 +163,7 @@ def addNodeID(atoms):
             at.setData('nodeid', i)
 
     return atoms
+
 
 def buildModel(pdb, calphas, coords, bfactors, cutoff=10.0):
     from ENM import buildENM, betaCarbonModel
@@ -175,10 +194,20 @@ def loadKirch(pdb):
     return kirch
 
 
-def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model):
+def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model, masses):
     # from input import model#, eigmethod
     print('Calculating Normal Modes')
     start = time.time()
+
+    useMass=True
+    if useMass:
+        from scipy.sparse import diags
+        mass = np.tile(np.repeat(masses,3), 60)
+        print('mass variance: ', np.std(mass))
+        print('mass mean: ', np.mean(mass))
+        print('mass min: ', np.min(mass))
+        print('mass max: ', np.max(mass))
+        Mass = diags(mass)
 
     cuth_mkee = False
     if model == 'anm':
@@ -196,7 +225,10 @@ def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model):
         print(perm)
     n_dim = mat.shape[0]
     if eigmethod == 'eigsh':
-        evals, evecs = eigsh(mat, k=n_modes, sigma=1e-10, which='LA')
+        if useMass:
+            evals, evecs = eigsh(mat, k=n_modes, M=Mass, sigma=1e-10, which='LA')
+        else:
+            evals, evecs = eigsh(mat, k=n_modes, sigma=1e-10, which='LA')
     elif eigmethod == 'lobpcg':
         from scipy.sparse.linalg import lobpcg
         from pyamg import smoothed_aggregation_solver
@@ -251,7 +283,6 @@ def modeCalc(pdb, hess, kirch, n_modes, eigmethod, model):
         evecs = cp.asnumpy(eigenstates_gpu)
     if cuth_mkee:
         evecs = evecs[perm, :].copy()
-    useMass=False
     end = time.time()
     print('NMA time: ', end - start)
     np.savez('../results/models/' + pdb + model + 'modes.npz', evals=evals, evecs=evecs)
@@ -389,7 +420,7 @@ def mechanicalProperties(bfactors, evals, evecs, title, coords, calphas, m):
     ci = confidenceInterval(bfactors, stderr)
 
     print(nModes, coeff, gamma)
-    n_asym = int(bfactors.shape[0])
+    n_asym = int(bfactors.shape[0]/60)
     np.savez('../results/subdivisions/' + pdb + '_sqFlucts.npz', sqFlucts=sqFlucts, bf=bfactors, k=k, cc=coeff, nModes=nModes)
     ax.plot(np.arange(bfactors.shape[0])[:n_asym], bfactors[:n_asym], label='B-factors')
     ax.plot(np.arange(sqFlucts.shape[0])[:n_asym], sqFlucts[:n_asym], label='Squared Fluctuations')
@@ -485,7 +516,7 @@ def distanceFlucts(evals, evecs, kirch, n_modes, title, coords):
 
     tree = BallTree(coords)
     adj = radius_neighbors_graph(tree, d_cutoff, mode='connectivity', n_jobs=-1)
-    adj = kirch.tocoo()
+    adj = adj.tocoo()
 
     covariance = sparse.lil_matrix((n_atoms, n_atoms))
     df = sparse.lil_matrix((n_atoms, n_atoms))

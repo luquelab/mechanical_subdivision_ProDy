@@ -59,19 +59,36 @@ def calcCosCentroids(X, labels, n_clusters):
 def median_score(coords, centroids):
     from settings import scoreMethod
     from sklearn.metrics import pairwise_distances
+    from sklearn.preprocessing import normalize
+
+    # n_rand = 10
+    # for i in range(n_rand):
+    #     randcoords = np.random.normal(size=coords.shape)
+    #     randcoords = normalize(randcoords)
+    #     dists = pairwise_distances(randcoords, centroids, metric='cosine')
+    #     d2min = np.partition(dists, kth=2)[:, :2]
+    #     if scoreMethod == 'median':
+    #         b = np.median(d2min[:, 1])
+    #         a = np.median(d2min[:, 0])
+    #     else:
+    #         b = np.mean(d2min[:, 1])
+    #         a = np.mean(d2min[:, 0])
+    #     r_score = b / a
 
     dists = pairwise_distances(coords,centroids, metric='cosine')
     cdist = pairwise_distances(centroids, centroids, metric='cosine')
     normal = cdist.mean()
     d2min = np.partition(dists, kth=2)[:,:2]
 
+    a = d2min[:,1]
+    b = d2min[:,0]
+    s = a/b
+
     if scoreMethod == 'median':
-        b = np.median(d2min[:,1])
-        a = np.median(d2min[:,0])
+        score = np.median(s)
     else:
-        b = np.mean(d2min[:, 1])
-        a = np.mean(d2min[:, 0])
-    score = b/a
+        score = np.mean(s)
+
     return score
 
 def cluster_types(labels):
